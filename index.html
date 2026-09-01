@@ -665,16 +665,23 @@
         };
 
         /**
-         * 3. AUDIO SYSTEM (Synthesized Web Audio API)
+         * 3. SOUND EFFECTS & DYNAMIC ARCADE MUSIC ENGINE
          */
         const AudioSys = {
             ctx: null,
             isMuted: false,
+            bgmTimer: null,
+            bgmTempo: 125, // BPM
+            bgmStep: 0,
+            isBgmPlaying: false,
+            
             init: function() {
                 try {
                     if (!this.ctx) {
-                        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                        if (AudioContextClass) this.ctx = new AudioContextClass();
+                        const AudioContext = window.AudioContext || window.webkitAudioContext;
+                        if (AudioContext) {
+                            this.ctx = new AudioContext();
+                        }
                     }
                     if (this.ctx && this.ctx.state === 'suspended') {
                         this.ctx.resume();
@@ -686,6 +693,14 @@
             toggleSound: function() {
                 try { this.init(); } catch(e) {}
                 this.isMuted = !this.isMuted;
+                if (this.isMuted) {
+                    this.stopBGM();
+                } else {
+                    const isGameVisible = !document.getElementById('screen-game').classList.contains('hidden');
+                    if (isGameVisible) {
+                        this.startBGM(GameState.level >= 5 ? 150 : (GameState.level >= 3 ? 136 : 125));
+                    }
+                }
                 const txt = this.isMuted ? 'เสียง: ปิด 🔇' : 'เสียง: เปิด 🔊';
                 const icon = this.isMuted ? '🔇' : '🔊';
                 
@@ -693,6 +708,142 @@
                 if (btnHome) btnHome.querySelector('span').innerText = txt;
                 const btnGame = document.getElementById('btn-sound-game');
                 if (btnGame) btnGame.innerText = icon;
+            },
+            startBGM: function(bpm = 125) {
+                if (this.isMuted) return;
+                this.init();
+                if (!this.ctx) return;
+                if (this.isBgmPlaying) this.stopBGM();
+                
+                this.bgmTempo = bpm;
+                this.bgmStep = 0;
+                this.isBgmPlaying = true;
+                
+                // Energetic Melodic Bassline & Chords (Upbeat Tropical Arcade Groove)
+                const bassPattern = [
+                    130.81, 0, 130.81, 196.00, 164.81, 0, 164.81, 220.00,
+                    174.61, 0, 174.61, 261.63, 196.00, 220.00, 246.94, 261.63
+                ];
+                const leadPattern = [
+                    523.25, 659.25, 783.99, 659.25, 587.33, 659.25, 783.99, 880.00,
+                    880.00, 783.99, 659.25, 587.33, 523.25, 587.33, 659.25, 783.99
+                ];
+                
+                let nextNoteTime = this.ctx.currentTime + 0.05;
+                
+                const schedule = () => {
+                    if (!this.isBgmPlaying || this.isMuted || !this.ctx) return;
+                    
+                    const stepDuration = (60 / this.bgmTempo) / 4; // 16th note duration
+                    
+                    while (nextNoteTime < this.ctx.currentTime + 0.25) {
+                        const step16 = this.bgmStep % 16;
+                        const beat4 = this.bgmStep % 4;
+                        
+                        // 1. Kick Drum (Beat 0 and 2)
+                        if (beat4 === 0) {
+                            this.playKick(nextNoteTime);
+                        }
+                        // 2. Snare / Pop (Beat 2)
+                        if (beat4 === 2) {
+                            this.playSnare(nextNoteTime);
+                        }
+                        // 3. Hi-Hat Shaker (Every 8th note)
+                        if (this.bgmStep % 2 === 0) {
+                            this.playHiHat(nextNoteTime);
+                        }
+                        
+                        // 4. Bass synth
+                        const bassFreq = bassPattern[step16];
+                        if (bassFreq > 0) {
+                            this.playBgmSynth('triangle', bassFreq, stepDuration * 1.6, 0.12, nextNoteTime);
+                        }
+                        
+                        // 5. Bright Lead synth
+                        const leadFreq = leadPattern[step16];
+                        if (leadFreq > 0) {
+                            this.playBgmSynth('sine', leadFreq, stepDuration * 0.9, 0.05, nextNoteTime);
+                        }
+                        
+                        nextNoteTime += stepDuration;
+                        this.bgmStep++;
+                    }
+                    
+                    this.bgmTimer = setTimeout(schedule, 50);
+                };
+                
+                schedule();
+            },
+            setBgmTempo: function(bpm) {
+                this.bgmTempo = bpm;
+            },
+            stopBGM: function() {
+                this.isBgmPlaying = false;
+                if (this.bgmTimer) {
+                    clearTimeout(this.bgmTimer);
+                    this.bgmTimer = null;
+                }
+            },
+            playBgmSynth: function(type, freq, duration, vol, startTime) {
+                if (this.isMuted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, startTime);
+                    gain.gain.setValueAtTime(vol, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                } catch(e) {}
+            },
+            playKick: function(time) {
+                if (this.isMuted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(140, time);
+                    osc.frequency.exponentialRampToValueAtTime(36, time + 0.09);
+                    gain.gain.setValueAtTime(0.18, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(time);
+                    osc.stop(time + 0.1);
+                } catch(e) {}
+            },
+            playSnare: function(time) {
+                if (this.isMuted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(240, time);
+                    osc.frequency.exponentialRampToValueAtTime(80, time + 0.07);
+                    gain.gain.setValueAtTime(0.1, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(time);
+                    osc.stop(time + 0.08);
+                } catch(e) {}
+            },
+            playHiHat: function(time) {
+                if (this.isMuted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(1200, time);
+                    gain.gain.setValueAtTime(0.025, time);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.035);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(time);
+                    osc.stop(time + 0.035);
+                } catch(e) {}
             },
             playOsc: function(type, freq, duration, volLevel = 0.3) {
                 if (this.isMuted || !this.ctx) return;
@@ -1423,6 +1574,9 @@
                 }
                 ARController.init(); 
                 ConveyorBelt.init();
+                
+                // Start dynamic arcade music
+                AudioSys.startBGM(125);
             },
             replayCurrentPlayer: function() {
                 // Replay immediately with the current player name to beat high score!
@@ -1560,6 +1714,15 @@
                 const energyRefill = baseRefill + streakBonus;
                 GameState.energy = Math.min(GameState.maxEnergy, GameState.energy + energyRefill);
                 
+                // Update BGM Tempo dynamically with level progression
+                if (GameState.level >= 5) {
+                    AudioSys.setBgmTempo(150); // Hyper Fever mode BPM
+                } else if (GameState.level >= 3) {
+                    AudioSys.setBgmTempo(136); // Faster excitement BPM
+                } else {
+                    AudioSys.setBgmTempo(125); // Standard upbeat BPM
+                }
+
                 UI.updateHUD();
                 UI.updateEnergyBar();
                 
@@ -1609,6 +1772,7 @@
                 this.generateQuestion(); 
             },
             endGame: function(isTimeout = false) {
+                AudioSys.stopBGM();
                 AudioSys.playVictory();
                 if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
                 
@@ -1683,6 +1847,7 @@
                 }
             },
             goHome: function() {
+                AudioSys.stopBGM();
                 if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
                 const modal = document.getElementById('modal-success');
                 if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
