@@ -1534,7 +1534,10 @@
                     comboTag.classList.add('hidden');
                 }
                 
-                modal.classList.remove('hidden');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    modal.style.display = 'flex';
+                }
                 
                 // Auto advance after 2.0 seconds in endless mode
                 if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
@@ -1547,7 +1550,11 @@
                     clearTimeout(GameState.autoNextTimeout);
                     GameState.autoNextTimeout = null;
                 }
-                document.getElementById('modal-success').classList.add('hidden');
+                const modal = document.getElementById('modal-success');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.style.display = 'none';
+                }
                 GameState.isModalOpen = false;
                 GameState.isCheckingBalance = false;
                 GameState.balanceHoldTime = 0;
@@ -1560,9 +1567,21 @@
             endGame: function(isTimeout = false) {
                 AudioSys.playVictory();
                 if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
-                document.getElementById('modal-success').classList.add('hidden');
-                document.getElementById('screen-game').classList.add('hidden');
-                document.getElementById('screen-end').classList.remove('hidden');
+                
+                const modal = document.getElementById('modal-success');
+                if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
+                
+                const screenGame = document.getElementById('screen-game');
+                if (screenGame) { screenGame.classList.add('hidden'); screenGame.style.display = 'none'; }
+                
+                const screenHome = document.getElementById('screen-home');
+                if (screenHome) { screenHome.classList.add('hidden'); screenHome.style.display = 'none'; }
+
+                const screenEnd = document.getElementById('screen-end');
+                if (screenEnd) {
+                    screenEnd.classList.remove('hidden');
+                    screenEnd.style.display = 'flex';
+                }
                 
                 const timeSpent = Math.max(1, Math.floor((Date.now() - GameState.startTime) / 1000));
                 document.getElementById('end-player-name').innerText = `น้อง${GameState.playerName} ${isTimeout ? '⚡ (หมดเวลา!)' : '🎉'}`;
@@ -1621,9 +1640,12 @@
             },
             goHome: function() {
                 if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
-                document.getElementById('modal-success').classList.add('hidden');
-                document.getElementById('screen-end').classList.add('hidden');
-                document.getElementById('screen-game').classList.add('hidden');
+                const modal = document.getElementById('modal-success');
+                if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
+                const end = document.getElementById('screen-end');
+                if (end) { end.classList.add('hidden'); end.style.display = 'none'; }
+                const game = document.getElementById('screen-game');
+                if (game) { game.classList.add('hidden'); game.style.display = 'none'; }
                 const home = document.getElementById('screen-home');
                 if (home) {
                     home.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
