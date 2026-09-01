@@ -844,7 +844,14 @@
             },
             updateHUD: function() {
                 document.getElementById('ui-score').innerText = GameState.score;
-                document.getElementById('ui-level').innerText = GameState.level;
+                const levelEl = document.getElementById('ui-level');
+                if (levelEl) {
+                    if (GameState.level >= 5) {
+                        levelEl.innerText = `${GameState.level} 🔥 FEVER`;
+                    } else {
+                        levelEl.innerText = GameState.level;
+                    }
+                }
                 document.getElementById('ui-qnum').innerText = `${GameState.totalCorrect} ข้อ`;
                 const comboBadge = document.getElementById('ui-combo-badge');
                 if (comboBadge) {
@@ -1199,11 +1206,13 @@
             
             update: function(dt) {
                 const canvasW = Renderer.layout.width || window.innerWidth;
-                this.xOffset = (this.xOffset + this.speed * dt) % 36;
+                const speedMult = GameState.level >= 5 ? 1.35 : (GameState.level >= 3 ? 1.15 : 1.0);
+                const activeSpeed = this.speed * speedMult;
+                this.xOffset = (this.xOffset + activeSpeed * dt) % 36;
                 
                 // Move items smoothly to the left
                 for (let i = 0; i < this.items.length; i++) {
-                    this.items[i].x -= this.speed * dt;
+                    this.items[i].x -= activeSpeed * dt;
                 }
                 
                 // Remove offscreen items
@@ -1431,17 +1440,20 @@
                 
                 let targetWeight = 1.0;
                 if (GameState.level === 1) {
-                    // Level 1: Whole numbers (1 to 5 kg)
-                    targetWeight = Math.floor(Math.random() * 5) + 1;
+                    // Level 1 (ข้อ 1-2): Whole numbers (1 to 4 kg)
+                    targetWeight = Math.floor(Math.random() * 4) + 1;
                 } else if (GameState.level === 2) {
-                    // Level 2: Halves (0.5 to 4.5 kg)
+                    // Level 2 (ข้อ 3-5): Halves (0.5 to 4.5 kg)
                     targetWeight = (Math.floor(Math.random() * 8) + 1) * 0.5;
                 } else if (GameState.level === 3) {
-                    // Level 3: Quarters (0.75 to 6.25 kg)
-                    targetWeight = (Math.floor(Math.random() * 15) + 3) * 0.25;
+                    // Level 3 (ข้อ 6-7): Quarters (0.75 to 5.25 kg)
+                    targetWeight = (Math.floor(Math.random() * 12) + 3) * 0.25;
+                } else if (GameState.level === 4) {
+                    // Level 4 (ข้อ 8-10): Advanced Quarters (1.25 to 6.75 kg)
+                    targetWeight = (Math.floor(Math.random() * 18) + 5) * 0.25;
                 } else {
-                    // Level 4+: Master level (1.25 to 8.75 kg)
-                    targetWeight = (Math.floor(Math.random() * 25) + 5) * 0.25;
+                    // Level 5+ (ข้อ 11+ Fever/Hyper): Master Challenge (1.75 to 8.75 kg)
+                    targetWeight = (Math.floor(Math.random() * 25) + 7) * 0.25;
                 }
 
                 GameState.targetWeightLeft = targetWeight;
@@ -1503,17 +1515,36 @@
                 GameState.score += earned;
                 GameState.totalCorrect++;
                 
-                // Dynamically increase difficulty level as player gets more correct answers
-                if (GameState.totalCorrect >= 12) {
-                    GameState.level = 4;
+                // Dynamically increase difficulty level based on questions answered
+                // Lv.1-2 (ข้อ 1-5), Lv.3-4 (ข้อ 6-10), Lv.5+ (ข้อ 11+ Fever/Hyper)
+                if (GameState.totalCorrect >= 15) {
+                    GameState.level = 6;
+                } else if (GameState.totalCorrect >= 10) {
+                    GameState.level = 5;
                 } else if (GameState.totalCorrect >= 7) {
+                    GameState.level = 4;
+                } else if (GameState.totalCorrect >= 5) {
                     GameState.level = 3;
-                } else if (GameState.totalCorrect >= 3) {
+                } else if (GameState.totalCorrect >= 2) {
                     GameState.level = 2;
+                } else {
+                    GameState.level = 1;
                 }
                 
-                // Refill Energy (+8 seconds, bonus +4s for streak >= 2, capped at 90s)
-                const energyRefill = 8 + (GameState.streak >= 2 ? 4 : 0);
+                // Dynamic Time Decay (แบบที่ 1):
+                // Lv.1-2 (ข้อ 1-5): +8s (+2s for streak >= 2)
+                // Lv.3-4 (ข้อ 6-10): +4s (+1s for streak >= 2)
+                // Lv.5+ (ข้อ 11+ Fever/Hyper): +2s (+0.5s for streak >= 2)
+                let baseRefill = 8;
+                let streakBonus = GameState.streak >= 2 ? 2 : 0;
+                if (GameState.level >= 5) {
+                    baseRefill = 2;
+                    streakBonus = GameState.streak >= 2 ? 0.5 : 0;
+                } else if (GameState.level >= 3) {
+                    baseRefill = 4;
+                    streakBonus = GameState.streak >= 2 ? 1 : 0;
+                }
+                const energyRefill = baseRefill + streakBonus;
                 GameState.energy = Math.min(GameState.maxEnergy, GameState.energy + energyRefill);
                 
                 UI.updateHUD();
@@ -1753,11 +1784,22 @@
                 ConveyorBelt.update(dt);
                 InputSys.update(dt);
 
-                // Energy depletion & Auto-Balance check
+                // Energy depletion & Auto-Balance check (Dynamic Time Decay - แบบที่ 1)
                 const isGameVisible = !document.getElementById('screen-game').classList.contains('hidden');
                 if (this.isRunning && isGameVisible && !GameState.isModalOpen) {
-                    // Deplete energy smoothly
-                    GameState.energy = Math.max(0, GameState.energy - dt);
+                    // Decay speed multiplier:
+                    // Lv.1-2 (ข้อ 1-5): 1.0x
+                    // Lv.3-4 (ข้อ 6-10): 1.2x
+                    // Lv.5+ (ข้อ 11+ Fever/Hyper): 1.5x
+                    let decaySpeed = 1.0;
+                    if (GameState.level >= 5) {
+                        decaySpeed = 1.5;
+                    } else if (GameState.level >= 3) {
+                        decaySpeed = 1.2;
+                    }
+
+                    // Deplete energy smoothly according to level speed
+                    GameState.energy = Math.max(0, GameState.energy - (dt * decaySpeed));
                     UI.updateEnergyBar();
 
                     if (GameState.energy <= 0) {
