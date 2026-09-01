@@ -16,6 +16,9 @@
     <!-- MediaPipe Libraries for AR Hand Tracking -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Supabase Client for Cloud Database & Leaderboard -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
         tailwind.config = {
@@ -451,15 +454,58 @@
         }
 
         /**
-         * 1. GOOGLE APPS SCRIPT API INTEGRATION (google.script.run + Fetch fallback)
+         * 1. DATABASE & CLOUD API INTEGRATION (Supabase.com + Fallbacks)
+         * -------------------------------------------------------------
+         * กำหนดค่า Supabase Project URL และ Anon Key เพื่อเชื่อมต่อฐานข้อมูลบน Supabase.com
          */
+        const SUPABASE_CONFIG = {
+            url: 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co',
+            anonKey: 'YOUR_SUPABASE_ANON_KEY',
+            tableName: 'leaderboard'
+        };
+
+        // Initialize Supabase Client
+        let supabaseClient = null;
+        try {
+            if (window.supabase && window.supabase.createClient && SUPABASE_CONFIG.url && !SUPABASE_CONFIG.url.includes('YOUR_SUPABASE_PROJECT_REF')) {
+                supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+            }
+        } catch (e) {
+            console.warn("Supabase initialization:", e);
+        }
+
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-liL1I1nXjrAQQKT9U-sRACjDVM2r-FiYi0fHECQliJRklMB3lW2hSdG07_fnfxC/exec';
 
         const API = {
-            getLeaderboard: function() {
-                return new Promise((resolve) => {
-                    // 1. Google Apps Script Native RPC (Instant & Zero CORS)
-                    if (typeof google !== 'undefined' && google.script && google.script.run) {
+            getLeaderboard: async function() {
+                // 1. Primary: Supabase Cloud Database (Fast & Realtime)
+                if (supabaseClient) {
+                    try {
+                        const { data, error } = await supabaseClient
+                            .from(SUPABASE_CONFIG.tableName)
+                            .select('player_name, score, play_time, highest_level, created_at')
+                            .order('score', { ascending: false })
+                            .order('play_time', { ascending: true })
+                            .limit(10);
+                        
+                        if (!error && Array.isArray(data) && data.length > 0) {
+                            const formatted = data.map((item, idx) => ({
+                                rank: idx + 1,
+                                name: item.player_name || 'ผู้เล่น',
+                                score: Number(item.score || 0),
+                                time: Number(item.play_time || 0)
+                            }));
+                            localStorage.setItem('magic_scale_leaderboard', JSON.stringify(formatted));
+                            return formatted;
+                        }
+                    } catch (e) {
+                        console.warn("Supabase getLeaderboard error:", e);
+                    }
+                }
+
+                // 2. Secondary: Google Apps Script RPC
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
+                    return new Promise((resolve) => {
                         google.script.run
                             .withSuccessHandler((res) => {
                                 try {
@@ -471,73 +517,89 @@
                                 } catch(e) {}
                                 resolve(this.getLocalFallback());
                             })
-                            .withFailureHandler((err) => {
-                                console.warn("GAS RPC getLeaderboard error:", err);
-                                resolve(this.getLocalFallback());
-                            })
+                            .withFailureHandler(() => resolve(this.getLocalFallback()))
                             .getLeaderboardData();
-                        return;
-                    }
+                    });
+                }
 
-                    // 2. Fetch with 3.5s timeout for external embedding
+                // 3. Third: Fetch fallback with timeout
+                try {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-                    fetch(SCRIPT_URL, {
+                    const res = await fetch(SCRIPT_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action: 'getLeaderboard' }),
                         signal: controller.signal
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        clearTimeout(timeoutId);
-                        if (Array.isArray(data) && data.length > 0) {
-                            localStorage.setItem('magic_scale_leaderboard', JSON.stringify(data));
-                            return resolve(data);
-                        }
-                        resolve(this.getLocalFallback());
-                    })
-                    .catch((err) => {
-                        clearTimeout(timeoutId);
-                        console.warn("Fetch getLeaderboard fallback:", err);
-                        resolve(this.getLocalFallback());
                     });
-                });
+                    clearTimeout(timeoutId);
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        localStorage.setItem('magic_scale_leaderboard', JSON.stringify(data));
+                        return data;
+                    }
+                } catch(e) {}
+
+                // 4. Local fallback
+                return this.getLocalFallback();
             },
-            saveScore: function(payload) {
-                // Save locally first immediately
+            saveScore: async function(payload) {
+                // Save locally first immediately for zero-delay UX
                 try {
                     let localList = JSON.parse(localStorage.getItem('magic_scale_leaderboard') || '[]');
-                    localList.push({ rank: 0, name: payload.PlayerName, score: payload.Score });
-                    localList.sort((a, b) => b.score - a.score);
+                    localList.push({ rank: 0, name: payload.PlayerName, score: payload.Score, time: payload.PlayTime });
+                    localList.sort((a, b) => b.score - a.score || a.time - b.time);
                     localList = localList.slice(0, 10).map((item, idx) => ({ ...item, rank: idx + 1 }));
                     localStorage.setItem('magic_scale_leaderboard', JSON.stringify(localList));
                 } catch(e) {}
 
-                return new Promise((resolve) => {
-                    // 1. Google Apps Script Native RPC
-                    if (typeof google !== 'undefined' && google.script && google.script.run) {
+                // 1. Primary: Supabase Cloud Database Insert
+                if (supabaseClient) {
+                    try {
+                        const { data, error } = await supabaseClient
+                            .from(SUPABASE_CONFIG.tableName)
+                            .insert([{
+                                session_id: String(payload.SessionID || ''),
+                                player_name: String(payload.PlayerName || 'ผู้เล่น'),
+                                score: Number(payload.Score || 0),
+                                highest_level: Number(payload.HighestLevel || 1),
+                                correct_answers: Number(payload.CorrectAnswers || 0),
+                                wrong_attempts: Number(payload.WrongAttempts || 0),
+                                play_time: Number(payload.PlayTime || 0)
+                            }]);
+                        
+                        if (!error) {
+                            return { status: 'success' };
+                        } else {
+                            console.warn("Supabase saveScore error:", error);
+                        }
+                    } catch (e) {
+                        console.warn("Supabase saveScore exception:", e);
+                    }
+                }
+
+                // 2. Secondary: Google Apps Script RPC
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
+                    return new Promise((resolve) => {
                         google.script.run
                             .withSuccessHandler((res) => resolve(res || { status: 'success' }))
-                            .withFailureHandler((err) => {
-                                console.warn("GAS RPC saveScore error:", err);
-                                resolve({ status: 'local_saved' });
-                            })
+                            .withFailureHandler(() => resolve({ status: 'local_saved' }))
                             .saveScoreData(payload);
-                        return;
-                    }
+                    });
+                }
 
-                    // 2. Fetch POST
-                    fetch(SCRIPT_URL, {
+                // 3. Third: Fetch POST
+                try {
+                    const res = await fetch(SCRIPT_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action: 'saveScore', data: payload })
-                    })
-                    .then(res => res.json())
-                    .then(res => resolve(res))
-                    .catch(() => resolve({ status: 'local_saved' }));
-                });
+                    });
+                    const result = await res.json();
+                    return result;
+                } catch(e) {}
+
+                return { status: 'local_saved' };
             },
             getLocalFallback: function() {
                 try {
