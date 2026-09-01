@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการคะแนนและผู้เล่น - เครื่องชั่งมหัศจรรย์ AR</title>
+    
+    <!-- Google Fonts: Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Prompt', 'sans-serif'] },
+                    colors: {
+                        primary: '#F97316',
+                        secondary: '#84CC16',
+                        dark: '#0F172A'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between p-3 sm:p-6">
+
+    <!-- ==========================================
+         1. PIN CODE LOCK SCREEN
+         ========================================== -->
+    <div id="login-modal" class="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-slate-800 border-2 border-slate-700 rounded-3xl p-6 sm:p-8 w-full max-w-sm text-center shadow-2xl">
+            <div class="text-4xl sm:text-5xl mb-2">🔐</div>
+            <h2 class="text-xl sm:text-2xl font-bold text-white mb-1">ระบบจัดการสำหรับคุณครู</h2>
+            <p class="text-xs sm:text-sm text-slate-400 mb-5">กรุณากรอกรหัส PIN เพื่อเข้าสู่แดชบอร์ด</p>
+            
+            <input type="password" id="admin-pin-input" placeholder="รหัส PIN (เริ่มต้น: 1234)" maxlength="8"
+                   onkeydown="if(event.key==='Enter') AdminApp.checkPin()"
+                   class="w-full text-center text-xl font-bold bg-slate-900 text-orange-400 border-2 border-slate-600 rounded-2xl py-3 px-4 mb-4 focus:outline-none focus:border-orange-500 transition-all tracking-widest">
+            
+            <button onclick="AdminApp.checkPin()" class="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold py-3 rounded-2xl shadow-lg active:scale-95 transition-all text-base">
+                🔓 เข้าสู่ระบบ
+            </button>
+            <div id="pin-error-msg" class="text-rose-400 text-xs font-semibold mt-3 hidden animate-bounce">
+                ❌ รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง
+            </div>
+            <div class="mt-4 text-[11px] text-slate-500">
+                (รหัส PIN เริ่มต้นคือ <span class="text-orange-400 font-bold">1234</span> สามารถเปลี่ยนได้ด้านใน)
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         2. MAIN ADMIN DASHBOARD
+         ========================================== -->
+    <div class="max-w-6xl w-full mx-auto flex-1 flex flex-col">
+        
+        <!-- Top Navigation Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800/90 border border-slate-700 rounded-3xl p-4 sm:p-5 mb-5 shadow-xl backdrop-blur-md gap-4">
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="bg-slate-700 hover:bg-slate-600 p-2.5 rounded-2xl text-lg active:scale-95 transition-all" title="กลับหน้าเกม">
+                    🎮
+                </a>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                        ⚖️ <span>แดชบอร์ดจัดการข้อมูลผู้เล่น</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">ระบบฐานข้อมูล Cloud Database (Supabase / LocalStorage)</p>
+                </div>
+            </div>
+
+            <!-- Header Quick Actions -->
+            <div class="flex items-center gap-2 flex-wrap justify-center">
+                <button onclick="AdminApp.refreshData()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl border border-slate-600 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                    🔄 <span>รีเฟรชข้อมูล</span>
+                </button>
+                <button onclick="AdminApp.exportCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                    📥 <span>ส่งออก Excel/CSV</span>
+                </button>
+                <button onclick="AdminApp.toggleSettings()" class="bg-orange-500 hover:bg-orange-400 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                    ⚙️ <span>ตั้งค่าเชื่อมต่อ</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Overview Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 shadow-lg">
+                <div class="text-xs text-slate-400 font-semibold">👥 ผู้เล่นทั้งหมด</div>
+                <div id="stat-total-players" class="text-2xl sm:text-3xl font-bold text-orange-400 mt-1">0</div>
+            </div>
+            <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 shadow-lg">
+                <div class="text-xs text-slate-400 font-semibold">⭐ คะแนนสูงสุด</div>
+                <div id="stat-high-score" class="text-2xl sm:text-3xl font-bold text-green-400 mt-1">0</div>
+            </div>
+            <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 shadow-lg">
+                <div class="text-xs text-slate-400 font-semibold">🎯 ตอบถูกรวม</div>
+                <div id="stat-total-correct" class="text-2xl sm:text-3xl font-bold text-blue-400 mt-1">0 ข้อ</div>
+            </div>
+            <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 shadow-lg">
+                <div class="text-xs text-slate-400 font-semibold">🌐 สถานะฐานข้อมูล</div>
+                <div id="stat-db-status" class="text-sm sm:text-base font-bold text-amber-400 mt-2 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> <span>ตรวจสอบ...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Section Drawer (Collapsible) -->
+        <div id="settings-panel" class="hidden bg-slate-800 border-2 border-orange-500/50 rounded-3xl p-5 mb-5 shadow-2xl">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-lg font-bold text-orange-400 flex items-center gap-2">
+                    ⚙️ <span>ตั้งค่าเชื่อมต่อ Supabase & รหัสผ่าน PIN</span>
+                </h3>
+                <button onclick="AdminApp.toggleSettings()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Supabase Project URL:</label>
+                    <input type="text" id="cfg-supabase-url" placeholder="https://xyzcompany.supabase.co"
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-orange-500">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Supabase Anon Key (Public Key):</label>
+                    <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-orange-500">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">เปลี่ยนรหัสผ่าน PIN แอดมิน:</label>
+                    <input type="text" id="cfg-admin-pin" placeholder="1234" maxlength="8"
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-orange-400 font-bold focus:outline-none focus:border-orange-500">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="AdminApp.saveSettings()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+                        💾 <span>บันทึกการตั้งค่า</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Table Section -->
+        <div class="bg-slate-800/90 border border-slate-700 rounded-3xl p-4 sm:p-5 shadow-xl flex-1 flex flex-col">
+            
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <input type="text" id="search-input" oninput="AdminApp.filterTable()" placeholder="🔍 ค้นหาชื่อผู้เล่น..."
+                           class="w-full sm:w-64 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-orange-500">
+                </div>
+                <div class="flex items-center gap-2 self-end sm:self-auto">
+                    <button onclick="AdminApp.clearAllData()" class="bg-rose-600/80 hover:bg-rose-500 text-white font-semibold text-xs px-3.5 py-2 rounded-xl border border-rose-500/50 active:scale-95 transition-all flex items-center gap-1 shadow-sm">
+                        🗑️ <span>ล้างประวัติทั้งหมด</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Responsive Table Container -->
+            <div class="overflow-x-auto rounded-2xl border border-slate-700 flex-1">
+                <table class="w-full text-left text-xs sm:text-sm text-slate-300">
+                    <thead class="bg-slate-900/90 text-slate-400 uppercase text-[11px] tracking-wider border-b border-slate-700 sticky top-0">
+                        <tr>
+                            <th class="p-3 text-center w-14">อันดับ</th>
+                            <th class="p-3">ชื่อผู้เล่น</th>
+                            <th class="p-3 text-center">คะแนน</th>
+                            <th class="p-3 text-center">ตอบถูก</th>
+                            <th class="p-3 text-center">ผิด</th>
+                            <th class="p-3 text-center">เวลา</th>
+                            <th class="p-3 text-center">ระดับ</th>
+                            <th class="p-3">วันที่/เวลา</th>
+                            <th class="p-3 text-center w-24">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-700/60">
+                        <tr>
+                            <td colspan="9" class="p-6 text-center text-slate-500 font-semibold animate-pulse">กำลังโหลดข้อมูล...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Attribution -->
+    <footer class="text-center text-[11px] text-slate-500 font-medium py-3 mt-4">
+        © 2026 กิตติศักดิ์ บุญเกตุ | โรงเรียนชุมชนเทศบาลวัดมณีสถิตกปิฏฐาราม. All Rights Reserved. • ระบบจัดการหลังบ้าน
+    </footer>
+
+    <!-- ==========================================
+         3. DASHBOARD CONTROLLER SCRIPT
+         ========================================== -->
+    <script>
+        const DEFAULT_CONFIG = {
+            url: 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co',
+            anonKey: 'YOUR_SUPABASE_ANON_KEY',
+            tableName: 'leaderboard'
+        };
+
+        const AdminApp = {
+            pin: '1234',
+            data: [],
+            supabase: null,
+            
+            init: function() {
+                // Load local settings
+                const savedPin = localStorage.getItem('admin_dashboard_pin');
+                if (savedPin) this.pin = savedPin;
+
+                const savedUrl = localStorage.getItem('supabase_project_url');
+                const savedKey = localStorage.getItem('supabase_anon_key');
+                if (savedUrl) document.getElementById('cfg-supabase-url').value = savedUrl;
+                if (savedKey) document.getElementById('cfg-supabase-key').value = savedKey;
+                document.getElementById('cfg-admin-pin').value = this.pin;
+
+                this.initSupabase();
+            },
+            initSupabase: function() {
+                const url = localStorage.getItem('supabase_project_url') || DEFAULT_CONFIG.url;
+                const key = localStorage.getItem('supabase_anon_key') || DEFAULT_CONFIG.anonKey;
+                
+                const statusEl = document.getElementById('stat-db-status');
+                if (window.supabase && url && !url.includes('YOUR_SUPABASE_PROJECT_REF')) {
+                    try {
+                        this.supabase = window.supabase.createClient(url, key);
+                        if (statusEl) statusEl.innerHTML = '🟢 <span class="text-emerald-400">Supabase Connected</span>';
+                    } catch(e) {
+                        this.supabase = null;
+                        if (statusEl) statusEl.innerHTML = '🟡 <span class="text-amber-400">LocalStorage Fallback</span>';
+                    }
+                } else {
+                    this.supabase = null;
+                    if (statusEl) statusEl.innerHTML = '🟡 <span class="text-amber-400">LocalStorage (ยังไม่ใส่ Key)</span>';
+                }
+            },
+            checkPin: function() {
+                const val = document.getElementById('admin-pin-input').value.trim();
+                if (val === this.pin) {
+                    document.getElementById('login-modal').classList.add('hidden');
+                    this.refreshData();
+                } else {
+                    document.getElementById('pin-error-msg').classList.remove('hidden');
+                }
+            },
+            toggleSettings: function() {
+                const panel = document.getElementById('settings-panel');
+                panel.classList.toggle('hidden');
+            },
+            saveSettings: function() {
+                const url = document.getElementById('cfg-supabase-url').value.trim();
+                const key = document.getElementById('cfg-supabase-key').value.trim();
+                const pin = document.getElementById('cfg-admin-pin').value.trim();
+
+                if (url) localStorage.setItem('supabase_project_url', url);
+                if (key) localStorage.setItem('supabase_anon_key', key);
+                if (pin) {
+                    localStorage.setItem('admin_dashboard_pin', pin);
+                    this.pin = pin;
+                }
+
+                this.initSupabase();
+                this.toggleSettings();
+                this.refreshData();
+                alert("✅ บันทึกการตั้งค่าเรียบร้อยแล้ว!");
+            },
+            refreshData: async function() {
+                const tbody = document.getElementById('table-body');
+                tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400 font-semibold animate-pulse">กำลังโหลดข้อมูล...</td></tr>';
+                
+                let list = [];
+                // 1. Try Supabase
+                if (this.supabase) {
+                    try {
+                        const { data, error } = await this.supabase
+                            .from('leaderboard')
+                            .select('*')
+                            .order('score', { ascending: false })
+                            .order('play_time', { ascending: true });
+                        
+                        if (!error && Array.isArray(data)) {
+                            list = data.map((it, idx) => ({
+                                id: it.id,
+                                rank: idx + 1,
+                                name: it.player_name || 'ผู้เล่น',
+                                score: Number(it.score || 0),
+                                correct: Number(it.correct_answers || 0),
+                                wrong: Number(it.wrong_attempts || 0),
+                                time: Number(it.play_time || 0),
+                                level: Number(it.highest_level || 1),
+                                date: it.created_at ? new Date(it.created_at).toLocaleString('th-TH') : '-'
+                            }));
+                        }
+                    } catch(e) {
+                        console.warn("Supabase fetch error:", e);
+                    }
+                }
+
+                // 2. Fallback to LocalStorage if Supabase empty
+                if (list.length === 0) {
+                    try {
+                        const local = JSON.parse(localStorage.getItem('magic_scale_leaderboard') || '[]');
+                        list = local.map((it, idx) => ({
+                            id: 'local_' + idx,
+                            rank: idx + 1,
+                            name: it.name || 'ผู้เล่น',
+                            score: Number(it.score || 0),
+                            correct: Number(it.correct || it.score / 10 || 0),
+                            wrong: Number(it.wrong || 0),
+                            time: Number(it.time || 0),
+                            level: Number(it.level || 1),
+                            date: 'ในเครื่อง (Local)'
+                        }));
+                    } catch(e) {}
+                }
+
+                this.data = list;
+                this.renderTable(list);
+                this.updateStats(list);
+            },
+            renderTable: function(list) {
+                const tbody = document.getElementById('table-body');
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-500 font-semibold">ยังไม่มีประวัติการเล่น</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                list.forEach(p => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-700/50 transition-colors';
+                    const rankIcon = p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `<span class="text-slate-400 font-bold">${p.rank}</span>`;
+                    
+                    tr.innerHTML = `
+                        <td class="p-3 text-center text-base">${rankIcon}</td>
+                        <td class="p-3 font-bold text-white">${this.escapeHtml(p.name)}</td>
+                        <td class="p-3 text-center font-bold text-green-400">${p.score}</td>
+                        <td class="p-3 text-center text-slate-300 font-semibold">${p.correct}</td>
+                        <td class="p-3 text-center text-rose-400 font-semibold">${p.wrong}</td>
+                        <td class="p-3 text-center text-slate-300">${p.time}s</td>
+                        <td class="p-3 text-center text-orange-400 font-bold">Lv.${p.level}</td>
+                        <td class="p-3 text-xs text-slate-400">${p.date}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="AdminApp.deleteRow('${p.id}', '${this.escapeHtml(p.name)}')" class="bg-rose-600/80 hover:bg-rose-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg active:scale-95 transition-all shadow-sm">
+                                🗑️ ลบ
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            },
+            filterTable: function() {
+                const q = document.getElementById('search-input').value.trim().toLowerCase();
+                if (!q) {
+                    this.renderTable(this.data);
+                    return;
+                }
+                const filtered = this.data.filter(it => it.name.toLowerCase().includes(q));
+                this.renderTable(filtered);
+            },
+            updateStats: function(list) {
+                document.getElementById('stat-total-players').innerText = list.length;
+                const maxScore = list.length > 0 ? Math.max(...list.map(it => it.score)) : 0;
+                document.getElementById('stat-high-score').innerText = maxScore;
+                const totalCorrect = list.reduce((acc, it) => acc + (it.correct || 0), 0);
+                document.getElementById('stat-total-correct').innerText = `${totalCorrect} ข้อ`;
+            },
+            deleteRow: async function(id, name) {
+                if (!confirm(`ยืนยันการลบประวัติของ "${name}" หรือไม่?`)) return;
+
+                // 1. Delete from Supabase if id is numeric
+                if (this.supabase && !isNaN(id)) {
+                    try {
+                        const { error } = await this.supabase
+                            .from('leaderboard')
+                            .delete()
+                            .eq('id', id);
+                        if (error) {
+                            alert("เกิดข้อผิดพลาดในการลบจาก Supabase: " + error.message);
+                        }
+                    } catch(e) {
+                        console.warn("Delete error:", e);
+                    }
+                }
+
+                // 2. Delete from LocalStorage
+                try {
+                    let local = JSON.parse(localStorage.getItem('magic_scale_leaderboard') || '[]');
+                    local = local.filter(it => it.name !== name);
+                    localStorage.setItem('magic_scale_leaderboard', JSON.stringify(local));
+                } catch(e) {}
+
+                this.refreshData();
+            },
+            clearAllData: async function() {
+                if (!confirm("⚠️ คำเตือน: ต้องการล้างประวัติผู้เล่นทั้งหมดจริงหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้")) return;
+                
+                // 1. Clear Supabase
+                if (this.supabase) {
+                    try {
+                        const { error } = await this.supabase
+                            .from('leaderboard')
+                            .delete()
+                            .neq('id', 0);
+                        if (error) console.warn("Supabase clear error:", error);
+                    } catch(e) {}
+                }
+
+                // 2. Clear LocalStorage
+                localStorage.removeItem('magic_scale_leaderboard');
+
+                this.refreshData();
+                alert("🧹 ล้างประวัติคะแนนเรียบร้อยแล้ว!");
+            },
+            exportCSV: function() {
+                if (!this.data || this.data.length === 0) {
+                    alert("ไม่มีข้อมูลสำหรับส่งออก");
+                    return;
+                }
+                let csv = "\uFEFFอันดับ,ชื่อผู้เล่น,คะแนน,ตอบถูก(ข้อ),จำนวนที่ผิด(ครั้ง),เวลาที่ใช้(วินาที),ระดับสูงสุด,วันที่บันทึก\n";
+                this.data.forEach(it => {
+                    csv += `"${it.rank}","${it.name}","${it.score}","${it.correct}","${it.wrong}","${it.time}","${it.level}","${it.date}"\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `magic_scale_leaderboard_${new Date().toISOString().slice(0,10)}.csv`;
+                a.click();
+            },
+            escapeHtml: function(str) {
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => AdminApp.init());
+    </script>
+</body>
+</html>
