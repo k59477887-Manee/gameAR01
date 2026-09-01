@@ -141,9 +141,14 @@
                     <input type="text" id="cfg-admin-pin" placeholder="1234" maxlength="8"
                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-orange-400 font-bold focus:outline-none focus:border-orange-500">
                 </div>
-                <div class="flex items-end">
-                    <button onclick="AdminApp.saveSettings()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
-                        💾 <span>บันทึกการตั้งค่า</span>
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">ลิงก์วิดีโอพื้นหลังหน้าแรก (MP4 Video URL):</label>
+                    <input type="text" id="cfg-bg-video" placeholder="https://... หรือปล่อยว่างเพื่อใช้ค่าเริ่มต้น"
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-orange-500">
+                </div>
+                <div class="md:col-span-2 flex justify-end mt-2">
+                    <button onclick="AdminApp.saveSettings()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2.5 px-6 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+                        💾 <span>บันทึกการตั้งค่าทั้งหมด</span>
                     </button>
                 </div>
             </div>
@@ -217,8 +222,10 @@
 
                 const savedUrl = localStorage.getItem('supabase_project_url');
                 const savedKey = localStorage.getItem('supabase_anon_key');
+                const savedVid = localStorage.getItem('custom_bg_video');
                 if (savedUrl) document.getElementById('cfg-supabase-url').value = savedUrl;
                 if (savedKey) document.getElementById('cfg-supabase-key').value = savedKey;
+                if (savedVid) document.getElementById('cfg-bg-video').value = savedVid;
                 document.getElementById('cfg-admin-pin').value = this.pin;
 
                 this.initSupabase();
@@ -258,12 +265,18 @@
                 const url = document.getElementById('cfg-supabase-url').value.trim();
                 const key = document.getElementById('cfg-supabase-key').value.trim();
                 const pin = document.getElementById('cfg-admin-pin').value.trim();
+                const vid = document.getElementById('cfg-bg-video').value.trim();
 
                 if (url) localStorage.setItem('supabase_project_url', url);
                 if (key) localStorage.setItem('supabase_anon_key', key);
                 if (pin) {
                     localStorage.setItem('admin_dashboard_pin', pin);
                     this.pin = pin;
+                }
+                if (vid) {
+                    localStorage.setItem('custom_bg_video', vid);
+                } else {
+                    localStorage.removeItem('custom_bg_video');
                 }
 
                 this.initSupabase();
