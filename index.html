@@ -112,12 +112,13 @@
     <div id="screen-home" class="fixed inset-0 z-50 flex flex-col items-center justify-between bg-slate-900 p-0 m-0 transition-opacity duration-500 overflow-y-auto hide-scroll relative">
         
         <!-- Ambient Animated Background Video -->
-        <video id="home-bg-video" autoplay loop muted playsinline webkit-playsinline class="absolute inset-0 w-full h-full object-cover pointer-events-none z-0 opacity-45">
+        <video id="home-bg-video" autoplay loop muted playsinline webkit-playsinline class="absolute inset-0 w-full h-full object-cover pointer-events-none z-0 opacity-75">
+            <source src="bg.mp4" type="video/mp4">
             <source src="https://assets.mixkit.co/videos/preview/mixkit-bright-colorful-powder-particles-floating-in-the-air-41443-large.mp4" type="video/mp4">
         </video>
         
         <!-- Video Gradient & Warm Color Lighting Overlay -->
-        <div class="absolute inset-0 bg-gradient-to-b from-amber-500/80 via-orange-400/75 to-emerald-500/80 backdrop-blur-[1px] pointer-events-none z-0"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-amber-500/45 via-orange-400/35 to-emerald-500/45 backdrop-blur-[0.5px] pointer-events-none z-0"></div>
 
         <!-- Floating Background Fruit Decors -->
         <div class="absolute top-6 left-6 text-4xl md:text-5xl float-anim-1 pointer-events-none opacity-80 select-none z-0">🍓</div>
