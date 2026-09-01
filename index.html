@@ -1,0 +1,2471 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>เครื่องชั่งมหัศจรรย์ AR - Magic Scale AR</title>
+    
+    <!-- Google Fonts: Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MediaPipe Libraries for AR Hand Tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Prompt', 'sans-serif'] },
+                    colors: {
+                        primary: '#F97316',   // Orange-500
+                        secondary: '#84CC16', // Green-500
+                        dark: '#1E293B'       // Slate-800
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * { box-sizing: border-box; }
+        html, body { 
+            margin: 0 !important; 
+            padding: 0 !important;
+            width: 100vw !important; 
+            height: 100vh !important;
+            min-height: 100% !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden !important;
+            touch-action: none; 
+            overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
+            background: #0f172a;
+        }
+        .hidden { display: none !important; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        #screen-home, #screen-game, #screen-end {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            min-height: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        .modal-enter { animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        
+        .pulse-btn {
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.6), 0 0 40px rgba(34, 197, 94, 0.2); }
+            50% { box-shadow: 0 0 35px rgba(34, 197, 94, 0.9), 0 0 60px rgba(34, 197, 94, 0.4); }
+        }
+
+        .float-anim-1 { animation: floatFruit1 4s ease-in-out infinite; }
+        .float-anim-2 { animation: floatFruit2 5s ease-in-out infinite; }
+        .float-anim-3 { animation: floatFruit3 4.5s ease-in-out infinite; }
+
+        @keyframes floatFruit1 {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-12px) rotate(8deg); }
+        }
+        @keyframes floatFruit2 {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-16px) rotate(-10deg); }
+        }
+        @keyframes floatFruit3 {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(6deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 w-full h-full overflow-hidden text-slate-800 font-sans">
+
+    <!-- ==========================================
+         UI LAYER: HOME SCREEN (EXCITING GAME ADVENTURE)
+         ========================================== -->
+    <div id="screen-home" class="fixed inset-0 z-50 flex flex-col items-center justify-between bg-gradient-to-b from-amber-400 via-orange-300 to-emerald-400 p-0 m-0 transition-opacity duration-500 overflow-y-auto hide-scroll">
+        
+        <!-- Floating Background Fruit Decors -->
+        <div class="absolute top-6 left-6 text-4xl md:text-5xl float-anim-1 pointer-events-none opacity-80 select-none">🍓</div>
+        <div class="absolute top-10 right-8 text-4xl md:text-5xl float-anim-2 pointer-events-none opacity-80 select-none">🍉</div>
+        <div class="absolute top-1/3 left-4 text-3xl md:text-4xl float-anim-3 pointer-events-none opacity-75 select-none">🍊</div>
+        <div class="absolute top-1/2 right-5 text-4xl md:text-5xl float-anim-1 pointer-events-none opacity-75 select-none">🍌</div>
+        <div class="absolute bottom-24 left-8 text-3xl md:text-4xl float-anim-2 pointer-events-none opacity-70 select-none">🍎</div>
+        <div class="absolute bottom-28 right-8 text-3xl md:text-4xl float-anim-3 pointer-events-none opacity-70 select-none">🍅</div>
+
+        <!-- Inner Content Area -->
+        <div class="w-full flex-1 flex flex-col items-center justify-between p-3 sm:p-5 z-10">
+            <!-- Header: Hero Title & Badges -->
+            <div class="text-center pt-1 md:pt-2">
+                <div class="inline-flex items-center gap-1.5 bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 text-white text-xs md:text-sm font-bold px-4 py-1.5 rounded-full uppercase tracking-wider mb-2 shadow-lg border-2 border-white/80 animate-bounce">
+                    <span>✨</span> <span>ผจญภัยดินแดนผลไม้มหัศจรรย์ AR</span> <span>✨</span>
+                </div>
+                
+                <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white drop-shadow-[0_4px_10px_rgba(120,53,15,0.9)] tracking-wide flex items-center justify-center gap-2 py-1">
+                    <span>⚖️</span>
+                    <span class="text-white drop-shadow-[0_3px_6px_rgba(180,83,9,0.9)]">เครื่องชั่งมหัศจรรย์</span>
+                    <span class="text-amber-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">AR</span>
+                </h1>
+                
+                <p class="text-xs sm:text-sm md:text-base text-amber-950 font-semibold mt-1 drop-shadow-sm bg-white/75 backdrop-blur-sm px-4 py-1 rounded-full inline-block border border-white/50">
+                    🎯 ภารกิจชั่งน้ำหนักผลไม้ให้สมดุล ชิงตำแหน่งสุดยอดนักชั่ง!
+                </p>
+            </div>
+
+            <!-- Fruit Weight Guide Showcase Bar -->
+            <div class="w-full max-w-lg my-1.5">
+                <div class="bg-white/90 backdrop-blur-md rounded-2xl p-2.5 shadow-lg border-2 border-amber-200">
+                    <div class="text-[11px] md:text-xs font-bold text-amber-800 text-center mb-1.5 flex items-center justify-center gap-1">
+                        <span>🌟</span> <span>คู่มือน้ำหนักผลไม้</span> <span>🌟</span>
+                    </div>
+                    <div class="grid grid-cols-6 gap-1 md:gap-2 text-center">
+                        <div class="bg-rose-50 rounded-xl p-1 border border-rose-200">
+                            <div class="text-xl md:text-2xl">🍓</div>
+                            <div class="text-[10px] md:text-xs font-bold text-rose-700">0.25 กก.</div>
+                        </div>
+                        <div class="bg-red-50 rounded-xl p-1 border border-red-200">
+                            <div class="text-xl md:text-2xl">🍎</div>
+                            <div class="text-[10px] md:text-xs font-bold text-red-700">0.5 กก.</div>
+                        </div>
+                        <div class="bg-orange-50 rounded-xl p-1 border border-orange-200">
+                            <div class="text-xl md:text-2xl">🍊</div>
+                            <div class="text-[10px] md:text-xs font-bold text-orange-700">1.0 กก.</div>
+                        </div>
+                        <div class="bg-yellow-50 rounded-xl p-1 border border-yellow-200">
+                            <div class="text-xl md:text-2xl">🍌</div>
+                            <div class="text-[10px] md:text-xs font-bold text-yellow-700">1.5 กก.</div>
+                        </div>
+                        <div class="bg-red-50 rounded-xl p-1 border border-red-200">
+                            <div class="text-xl md:text-2xl">🍅</div>
+                            <div class="text-[10px] md:text-xs font-bold text-red-700">2.0 กก.</div>
+                        </div>
+                        <div class="bg-emerald-50 rounded-xl p-1 border border-emerald-200">
+                            <div class="text-xl md:text-2xl">🍉</div>
+                            <div class="text-[10px] md:text-xs font-bold text-emerald-700">5.0 กก.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leaderboard Card -->
+            <div class="bg-white/95 backdrop-blur-md rounded-3xl p-3.5 sm:p-4 md:p-5 w-full max-w-md shadow-2xl border-4 border-white my-1">
+                <div class="flex items-center justify-between mb-2 bg-gradient-to-r from-amber-100 to-orange-100 px-3.5 py-1.5 rounded-2xl border border-amber-200/60">
+                    <h2 class="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                        🏆 <span>ทำเนียบยอดนักชั่ง</span>
+                    </h2>
+                    <button onclick="UI.updateLeaderboard()" title="รีเฟรชอันดับ" class="text-orange-600 hover:text-orange-700 active:scale-95 transition-transform font-bold text-xs bg-white px-3 py-1 rounded-xl shadow-sm border border-orange-200">
+                        🔄 รีเฟรช
+                    </button>
+                </div>
+                <div id="leaderboard-container" class="space-y-1.5 max-h-36 sm:max-h-44 md:max-h-48 overflow-y-auto hide-scroll px-1">
+                    <div class="text-center text-slate-400 font-medium text-sm py-4 animate-pulse">กำลังโหลดข้อมูลอันดับ...</div>
+                </div>
+            </div>
+
+            <!-- Quick 3 Steps Guide -->
+            <div class="w-full max-w-md grid grid-cols-3 gap-1.5 text-center text-[10px] md:text-xs font-bold text-amber-900">
+                <div class="bg-white/80 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
+                    1️⃣ สังเกตน้ำหนักซ้าย
+                </div>
+                <div class="bg-white/80 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
+                    2️⃣ หยิบผลไม้
+                </div>
+                <div class="bg-white/80 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
+                    3️⃣ วางให้สมดุลพอดี
+                </div>
+            </div>
+
+            <!-- Start Section: Player Name & Giant 3D Play Button -->
+            <div class="flex flex-col items-center gap-2 pb-1 w-full max-w-md mt-1">
+                <div class="w-full bg-white/95 backdrop-blur-md rounded-2xl p-2.5 shadow-lg border-2 border-orange-300">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">👤</span>
+                        <input type="text" id="player-name-input" placeholder="พิมพ์ชื่อเล่นของคุณ (เช่น กิตติศักดิ์)..." maxlength="20" value=""
+                               oninput="UI.checkNameAvailability()"
+                               onkeydown="if(event.key==='Enter') GameController.startGame()"
+                               class="w-full text-base md:text-lg font-bold text-orange-600 bg-orange-50/60 rounded-xl px-3 py-1.5 border border-orange-200 focus:outline-none focus:bg-white focus:border-orange-500 text-center transition-all" autocomplete="off">
+                    </div>
+                    <div id="name-status-badge" class="text-[11px] md:text-xs font-semibold text-center mt-1 text-amber-800">
+                        ✍️ กรุณาพิมพ์ชื่อเล่นของคุณเพื่อเริ่มเล่น
+                    </div>
+                </div>
+
+                <button id="btn-start-game" onclick="GameController.startGame()" class="w-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-400 hover:to-emerald-500 text-white text-xl sm:text-2xl md:text-3xl font-bold py-3 md:py-3.5 px-8 rounded-[2rem] border-b-[6px] border-green-800 active:border-b-0 active:translate-y-[6px] transition-all shadow-2xl pulse-btn flex items-center justify-center gap-3 cursor-pointer">
+                    <span>🚀 เริ่มเล่นเกมทันที!</span>
+                </button>
+                
+                <div class="flex items-center justify-between w-full text-xs text-amber-950 font-bold px-2">
+                    <span>🎮 ลากหรือแตะผลไม้ใส่ตาชั่ง</span>
+                    <button onclick="AudioSys.toggleSound()" id="btn-sound-home" class="flex items-center gap-1 bg-white/90 px-3 py-1 rounded-full border border-amber-200 text-slate-800 shadow-sm hover:bg-white active:scale-95 transition-all font-semibold">
+                        🔊 <span>เสียง: เปิด</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Attribution (True 100% Edge-to-Edge Horizontal Bar) -->
+        <footer class="w-full m-0 py-2 px-4 z-10 bg-white/80 backdrop-blur-md border-t border-white/60 shadow-md text-center text-[10px] sm:text-[11px] md:text-xs text-amber-950 font-medium flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 shrink-0">
+            <span>© 2026 กิตติศักดิ์ บุญเกตุ | โรงเรียนชุมชนเทศบาลวัดมณีสถิตกปิฏฐาราม. All Rights Reserved.</span>
+            <span class="hidden sm:inline text-amber-700/60">•</span>
+            <span class="text-amber-900 font-bold">สื่อการเรียนรู้วิทยาการคำนวณ (Computational Thinking)</span>
+        </footer>
+    </div>
+
+    <!-- ==========================================
+         GAME LAYER (AR CAMERA + CANVAS + HUD)
+         ========================================== -->
+    <div id="screen-game" class="hidden absolute inset-0 bg-slate-950 overflow-hidden">
+        
+        <!-- Hidden video element used as feed for MediaPipe Hands -->
+        <video id="camera-video" class="hidden" playsinline autoplay muted></video>
+        
+        <!-- Main Render Canvas -->
+        <canvas id="game-canvas" class="absolute inset-0 w-full h-full object-cover"></canvas>
+
+        <!-- TOP BAR: Controls & Long Energy Gauge HUD -->
+        <div class="absolute top-0 left-0 w-full p-2.5 md:p-4 flex flex-col md:flex-row justify-between items-center gap-2 z-30 pointer-events-none">
+            
+            <!-- Left Info: Score & Question Progress -->
+            <div class="flex items-center gap-2 pointer-events-auto w-full md:w-auto justify-between md:justify-start">
+                <div class="bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-lg border-2 border-slate-100 flex items-center gap-2">
+                    <span class="text-yellow-400 text-xl md:text-2xl">⭐</span>
+                    <div class="text-slate-700 font-bold text-xs md:text-sm">
+                        คะแนน: <span id="ui-score" class="text-orange-600 text-lg md:text-xl font-bold">0</span>
+                    </div>
+                    <div id="ui-combo-badge" class="hidden bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                        🔥 x2
+                    </div>
+                </div>
+                
+                <div class="bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-md border-2 border-slate-100 text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                    <span>🎯 ตอบถูกแล้ว:</span> <span id="ui-qnum" class="text-orange-500 font-bold">0 ข้อ</span>
+                </div>
+            </div>
+
+            <!-- Long Energy / Time Gauge Bar (90 seconds, Visual only, No numbers) -->
+            <div class="w-full md:max-w-md lg:max-w-xl pointer-events-auto px-1">
+                <div class="bg-slate-900/90 backdrop-blur-md px-3.5 py-1.5 md:py-2 rounded-2xl border-2 border-slate-700 shadow-xl flex items-center gap-2.5">
+                    <span class="text-sm md:text-base animate-pulse">⚡</span>
+                    <div class="flex-1 bg-slate-950 h-3 md:h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                        <div id="ui-energy-bar" class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all duration-150 shadow-[0_0_12px_rgba(34,197,94,0.8)]" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Controls: Sound & Mode Toggle & Exit -->
+            <div class="flex items-center gap-2 pointer-events-auto self-end md:self-auto">
+                <button onclick="ARController.toggleCamera()" id="btn-camera-toggle" class="bg-white/95 hover:bg-white text-slate-700 p-2 md:p-2.5 rounded-2xl shadow-lg border-2 border-slate-100 text-xs md:text-sm font-bold flex items-center gap-1.5 active:scale-95 transition-all">
+                    <span id="camera-icon">📷</span>
+                    <span id="camera-text" class="hidden md:inline">โหมดกล้อง AR</span>
+                </button>
+
+                <button onclick="AudioSys.toggleSound()" id="btn-sound-game" class="bg-white/95 hover:bg-white text-slate-700 p-2 md:p-2.5 rounded-2xl shadow-lg border-2 border-slate-100 text-xs md:text-sm font-bold active:scale-95 transition-all" title="เปิด/ปิดเสียง">
+                    🔊
+                </button>
+
+                <button onclick="GameController.confirmExit()" class="bg-rose-500 hover:bg-rose-400 text-white p-2 md:p-2.5 rounded-2xl shadow-lg border-b-4 border-rose-700 text-xs md:text-sm font-bold active:translate-y-1 active:border-b-0 transition-all" title="กลับหน้าแรก">
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Top: Question Box & Action Buttons -->
+        <div class="absolute top-24 md:top-18 left-1/2 transform -translate-x-1/2 w-[92%] max-w-xl z-20 pointer-events-none flex flex-col items-center">
+            <div class="bg-white/95 backdrop-blur-md border-[4px] border-orange-500 rounded-3xl px-5 py-2.5 md:py-3.5 text-center shadow-2xl pointer-events-auto relative w-full">
+                <div class="absolute -top-3.5 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white px-4 py-0.5 rounded-full border-2 border-white font-bold text-xs whitespace-nowrap shadow-md">
+                    ระดับความยาก: Lv.<span id="ui-level">1</span>
+                </div>
+                <div id="ui-question-text" class="text-sm md:text-base font-bold text-slate-800 mt-1 tracking-wide leading-snug">
+                    กำลังเตรียมผลไม้สำหรับชั่งน้ำหนัก...
+                </div>
+            </div>
+
+            <!-- Action Buttons: Clear Basket & Hint (Auto-check when balanced!) -->
+            <div class="flex items-center gap-3 mt-2 pointer-events-auto">
+                <button onclick="GameController.showHint()" id="btn-hint" class="bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-xs md:text-sm px-3.5 py-1.5 rounded-2xl border-b-4 border-amber-600 active:translate-y-1 active:border-b-0 transition-all shadow-md flex items-center gap-1.5" title="ขอคำใบ้">
+                    💡 <span>ขอคำใบ้</span>
+                </button>
+
+                <button onclick="GameController.clearRightBasket()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs md:text-sm px-3.5 py-1.5 rounded-2xl border-b-4 border-slate-900 active:translate-y-1 active:border-b-0 transition-all shadow-md flex items-center gap-1.5">
+                    🗑️ <span>ล้างตะกร้า</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- VICTORY SUCCESS POPUP MODAL -->
+        <div id="modal-success" class="hidden absolute inset-0 z-[65] bg-slate-950/75 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div class="bg-white rounded-[2.5rem] p-5 sm:p-7 w-full max-w-sm text-center shadow-[0_0_50px_rgba(34,197,94,0.45)] border-[5px] border-green-400 modal-enter relative overflow-hidden">
+                <div class="text-4xl sm:text-5xl mb-1">⚖️✨</div>
+                <h3 class="text-2xl sm:text-3xl font-bold text-green-600 mb-1">สมดุลเป๊ะ! ถูกต้อง</h3>
+                
+                <!-- Balance weights comparison card -->
+                <div class="bg-green-50 rounded-2xl p-3 border-2 border-green-200 my-2.5 flex justify-center items-center gap-3 shadow-inner">
+                    <span id="popup-weight-left" class="font-bold text-blue-600 text-lg md:text-xl">3.0 kg</span>
+                    <span class="text-slate-400 font-bold text-xl">＝</span>
+                    <span id="popup-weight-right" class="font-bold text-orange-600 text-lg md:text-xl">3.0 kg</span>
+                </div>
+
+                <!-- Reward tags: score, combo, energy refill -->
+                <div class="flex justify-center items-center gap-2 mb-3.5 flex-wrap">
+                    <div class="bg-amber-100 text-amber-900 font-bold text-xs md:text-sm px-3 py-1 rounded-full border border-amber-300 flex items-center gap-1">
+                        <span>⭐</span> <span id="popup-earned-score">+10 คะแนน</span>
+                    </div>
+                    <div id="popup-combo-tag" class="hidden bg-gradient-to-r from-rose-500 to-orange-500 text-white font-bold text-xs md:text-sm px-3 py-1 rounded-full shadow-md animate-bounce">
+                        🔥 COMBO x2!
+                    </div>
+                    <div id="popup-energy-tag" class="bg-emerald-100 text-emerald-900 font-bold text-xs md:text-sm px-3 py-1 rounded-full border border-emerald-300">
+                        ⚡ เติมพลังงาน +6s
+                    </div>
+                </div>
+                
+                <button onclick="GameController.nextQuestion()" class="w-full bg-green-500 hover:bg-green-400 text-white text-lg sm:text-xl font-bold py-3 rounded-2xl border-b-[6px] border-green-700 active:border-b-0 active:translate-y-[6px] transition-all shadow-lg flex items-center justify-center gap-2">
+                    <span>ลุยข้อต่อไป 🚀</span>
+                </button>
+                <div class="text-slate-400 text-xs font-medium mt-2">หรือระบบจะไปต่ออัตโนมัติ...</div>
+            </div>
+        </div>
+
+        <!-- Feedback Floating Message Banner -->
+        <div id="ui-feedback" class="absolute top-[40%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition-all duration-300 z-40 scale-90">
+            <div id="ui-feedback-text" class="px-8 py-4 rounded-3xl text-2xl md:text-3xl font-bold text-white shadow-2xl backdrop-blur-md border-[4px]">
+                ยอดเยี่ยม!
+            </div>
+        </div>
+
+        <!-- Simulator / AR Indicator Banner -->
+        <div id="simulator-warning" class="hidden absolute bottom-[135px] md:bottom-[145px] left-1/2 transform -translate-x-1/2 bg-amber-400/90 text-slate-900 px-4 py-1.5 rounded-full font-bold text-xs shadow-lg pointer-events-none z-20 border-2 border-amber-500 flex items-center gap-1.5">
+            <span>🖱️</span> <span>โหมดสัมผัส/เมาส์: คลิกหรือลากผลไม้จากสายพานใส่ตะกร้าขวา</span>
+        </div>
+
+        <!-- Conveyor Belt Helper Label -->
+        <div class="absolute bottom-2 left-4 text-[10px] md:text-xs text-slate-400 font-medium pointer-events-none z-20 bg-slate-950/60 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-800 flex items-center gap-2">
+            <span>⚙️ สายพานลำเลียงผลไม้</span>
+            <span class="text-orange-400 font-semibold">| หยิบหรือแตะผลไม้เพื่อชั่งน้ำหนัก</span>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         UI LAYER: GAME OVER / END SCREEN
+         ========================================== -->
+    <div id="screen-end" class="hidden fixed inset-0 z-[70] bg-slate-950/85 flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-white rounded-[2.5rem] p-5 sm:p-7 w-full max-w-md text-center shadow-[0_0_60px_rgba(249,115,22,0.4)] border-[6px] border-orange-400 modal-enter relative overflow-hidden">
+            
+            <div class="text-5xl md:text-6xl mb-1">🎉</div>
+            <h2 class="text-2xl sm:text-3xl font-bold text-orange-500 mb-0.5">ภารกิจสำเร็จ!</h2>
+            <p id="end-player-name" class="text-base sm:text-lg font-bold text-slate-600 mb-2">น้อง...</p>
+            
+            <!-- Real-time Ranking Badge -->
+            <div id="end-rank-banner" class="bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 text-white font-bold text-xs sm:text-sm md:text-base py-2 px-3 rounded-2xl mb-3 shadow-md flex items-center justify-center gap-1.5 border-2 border-white/80 animate-pulse">
+                <span>👑</span> <span id="end-rank-text">กำลังสรุปอันดับของคุณ...</span>
+            </div>
+
+            <div class="bg-slate-50 p-3.5 sm:p-4 rounded-3xl border-4 border-slate-100 mb-4 text-left shadow-inner">
+                <div class="text-center mb-2">
+                    <div class="text-xs text-slate-400 font-semibold uppercase tracking-wider">คะแนนรวมทั้งหมด</div>
+                    <div id="end-score" class="text-4xl sm:text-5xl font-bold text-green-500">0</div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2.5 border-t-2 border-slate-200 pt-2.5">
+                    <div class="bg-white p-2.5 rounded-2xl border border-slate-100">
+                        <div class="text-xs text-slate-400 font-semibold">✅ ตอบถูก</div>
+                        <div id="end-correct" class="text-base sm:text-lg font-bold text-slate-700">0 ข้อ</div>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-2xl border border-slate-100">
+                        <div class="text-xs text-slate-400 font-semibold">❌ จำนวนที่ผิด</div>
+                        <div id="end-wrong" class="text-base sm:text-lg font-bold text-slate-700">0 ครั้ง</div>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-2xl border border-slate-100">
+                        <div class="text-xs text-slate-400 font-semibold">⏱️ เวลาที่ใช้</div>
+                        <div id="end-time" class="text-base sm:text-lg font-bold text-slate-700">0 วินาที</div>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-2xl border border-slate-100">
+                        <div class="text-xs text-slate-400 font-semibold">⭐ ระดับสูงสุด</div>
+                        <div class="text-base sm:text-lg font-bold text-orange-500">Lv.<span id="end-level">1</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex gap-2.5">
+                <button onclick="GameController.goHome()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 sm:py-3.5 rounded-2xl transition-all text-sm sm:text-base md:text-lg shadow-md active:scale-95">
+                    🏠 กลับหน้าหลัก
+                </button>
+                <button onclick="GameController.replayCurrentPlayer()" class="flex-1 bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 sm:py-3.5 rounded-2xl border-b-[6px] border-orange-700 active:border-b-0 active:translate-y-[6px] transition-all text-sm sm:text-base md:text-lg shadow-lg">
+                    🔄 เล่นอีกครั้ง
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         APPLICATION SCRIPTS
+         ========================================== -->
+    <script>
+        // Polyfill for CanvasRenderingContext2D.prototype.roundRect
+        if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                if (typeof r === 'undefined') r = 5;
+                if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
+                else {
+                    var defaultRadius = { tl: 0, tr: 0, br: 0, bl: 0 };
+                    for (var side in defaultRadius) {
+                        r[side] = r[side] || defaultRadius[side];
+                    }
+                }
+                var tl = r.tl || 0, tr = r.tr || 0, br = r.br || 0, bl = r.bl || 0;
+                this.beginPath();
+                this.moveTo(x + tl, y);
+                this.lineTo(x + w - tr, y);
+                this.quadraticCurveTo(x + w, y, x + w, y + tr);
+                this.lineTo(x + w, y + h - br);
+                this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+                this.lineTo(x + bl, y + h);
+                this.quadraticCurveTo(x, y + h, x, y + h - bl);
+                this.lineTo(x, y + tl);
+                this.quadraticCurveTo(x, y, x + tl, y);
+                this.closePath();
+                return this;
+            };
+        }
+
+        /**
+         * 1. GOOGLE APPS SCRIPT API INTEGRATION (google.script.run + Fetch fallback)
+         */
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-liL1I1nXjrAQQKT9U-sRACjDVM2r-FiYi0fHECQliJRklMB3lW2hSdG07_fnfxC/exec';
+
+        const API = {
+            getLeaderboard: function() {
+                return new Promise((resolve) => {
+                    // 1. Google Apps Script Native RPC (Instant & Zero CORS)
+                    if (typeof google !== 'undefined' && google.script && google.script.run) {
+                        google.script.run
+                            .withSuccessHandler((res) => {
+                                try {
+                                    const data = typeof res === 'string' ? JSON.parse(res) : res;
+                                    if (Array.isArray(data) && data.length > 0) {
+                                        localStorage.setItem('magic_scale_leaderboard', JSON.stringify(data));
+                                        return resolve(data);
+                                    }
+                                } catch(e) {}
+                                resolve(this.getLocalFallback());
+                            })
+                            .withFailureHandler((err) => {
+                                console.warn("GAS RPC getLeaderboard error:", err);
+                                resolve(this.getLocalFallback());
+                            })
+                            .getLeaderboardData();
+                        return;
+                    }
+
+                    // 2. Fetch with 3.5s timeout for external embedding
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+                    fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'getLeaderboard' }),
+                        signal: controller.signal
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        clearTimeout(timeoutId);
+                        if (Array.isArray(data) && data.length > 0) {
+                            localStorage.setItem('magic_scale_leaderboard', JSON.stringify(data));
+                            return resolve(data);
+                        }
+                        resolve(this.getLocalFallback());
+                    })
+                    .catch((err) => {
+                        clearTimeout(timeoutId);
+                        console.warn("Fetch getLeaderboard fallback:", err);
+                        resolve(this.getLocalFallback());
+                    });
+                });
+            },
+            saveScore: function(payload) {
+                // Save locally first immediately
+                try {
+                    let localList = JSON.parse(localStorage.getItem('magic_scale_leaderboard') || '[]');
+                    localList.push({ rank: 0, name: payload.PlayerName, score: payload.Score });
+                    localList.sort((a, b) => b.score - a.score);
+                    localList = localList.slice(0, 10).map((item, idx) => ({ ...item, rank: idx + 1 }));
+                    localStorage.setItem('magic_scale_leaderboard', JSON.stringify(localList));
+                } catch(e) {}
+
+                return new Promise((resolve) => {
+                    // 1. Google Apps Script Native RPC
+                    if (typeof google !== 'undefined' && google.script && google.script.run) {
+                        google.script.run
+                            .withSuccessHandler((res) => resolve(res || { status: 'success' }))
+                            .withFailureHandler((err) => {
+                                console.warn("GAS RPC saveScore error:", err);
+                                resolve({ status: 'local_saved' });
+                            })
+                            .saveScoreData(payload);
+                        return;
+                    }
+
+                    // 2. Fetch POST
+                    fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'saveScore', data: payload })
+                    })
+                    .then(res => res.json())
+                    .then(res => resolve(res))
+                    .catch(() => resolve({ status: 'local_saved' }));
+                });
+            },
+            getLocalFallback: function() {
+                try {
+                    const local = localStorage.getItem('magic_scale_leaderboard');
+                    if (local) {
+                        const parsed = JSON.parse(local);
+                        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                    }
+                } catch(e) {}
+                return [
+                    { rank: 1, name: 'ต้นกล้า', score: 50 },
+                    { rank: 2, name: 'ฟ้าใส', score: 45 },
+                    { rank: 3, name: 'ภูริ', score: 40 }
+                ];
+            }
+        };
+
+        /**
+         * 2. GAME CONFIGURATION & STATE
+         */
+        const GAME_CONFIG = {
+            totalQuestions: 5,
+            points: { firstTry: 10, secondTry: 7, thirdTry: 5 },
+            scaleMaxWeightDiff: 10, 
+            scaleMaxAngle: Math.PI / 6.5, 
+            items: [
+                { id: 'strawberry', emoji: '🍓', name: 'สตรอว์เบอร์รี', weight: 0.25 },
+                { id: 'apple', emoji: '🍎', name: 'แอปเปิล', weight: 0.5 },
+                { id: 'orange', emoji: '🍊', name: 'ส้ม', weight: 1.0 },
+                { id: 'banana', emoji: '🍌', name: 'กล้วย', weight: 1.5 },
+                { id: 'tomato', emoji: '🍅', name: 'มะเขือเทศ', weight: 2.0 },
+                { id: 'watermelon', emoji: '🍉', name: 'แตงโม', weight: 5.0 }
+            ]
+        };
+
+        const GameState = {
+            playerName: '',
+            sessionID: '',
+            score: 0,
+            level: 1,
+            currentQNum: 0,
+            attempts: 0,
+            totalCorrect: 0,
+            totalWrong: 0,
+            startTime: 0,
+            maxEnergy: 90,
+            energy: 90,
+            streak: 0,
+            maxStreak: 0,
+            isCheckingBalance: false,
+            balanceHoldTime: 0,
+            isModalOpen: false,
+            autoNextTimeout: null,
+            targetWeightLeft: 0,
+            leftBasketItems: [],
+            rightBasketItems: [],
+            isSimulating: true, // true: mouse/touch, false: AR hand tracking
+            isDragging: false,
+            draggedItem: null,
+            existingPlayerNames: new Set()
+        };
+
+        /**
+         * 3. AUDIO SYSTEM (Synthesized Web Audio API)
+         */
+        const AudioSys = {
+            ctx: null,
+            isMuted: false,
+            init: function() {
+                try {
+                    if (!this.ctx) {
+                        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                        if (AudioContextClass) this.ctx = new AudioContextClass();
+                    }
+                    if (this.ctx && this.ctx.state === 'suspended') {
+                        this.ctx.resume();
+                    }
+                } catch(e) {
+                    console.warn("AudioContext init skipped/blocked:", e);
+                }
+            },
+            toggleSound: function() {
+                try { this.init(); } catch(e) {}
+                this.isMuted = !this.isMuted;
+                const txt = this.isMuted ? 'เสียง: ปิด 🔇' : 'เสียง: เปิด 🔊';
+                const icon = this.isMuted ? '🔇' : '🔊';
+                
+                const btnHome = document.getElementById('btn-sound-home');
+                if (btnHome) btnHome.querySelector('span').innerText = txt;
+                const btnGame = document.getElementById('btn-sound-game');
+                if (btnGame) btnGame.innerText = icon;
+            },
+            playOsc: function(type, freq, duration, volLevel = 0.3) {
+                if (this.isMuted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(volLevel, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            },
+            playClick: function() { this.playOsc('triangle', 600, 0.08, 0.2); },
+            playGrab: function() { this.playOsc('sine', 850, 0.12, 0.25); },
+            playDrop: function() { this.playOsc('sine', 380, 0.18, 0.25); },
+            playSuccess: function() {
+                if (this.isMuted) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => this.playOsc('triangle', freq, 0.25, 0.3), idx * 100);
+                });
+            },
+            playError: function() {
+                if (this.isMuted) return;
+                this.playOsc('sawtooth', 220, 0.18, 0.25);
+                setTimeout(() => this.playOsc('sawtooth', 170, 0.28, 0.25), 120);
+            },
+            playVictory: function() {
+                if (this.isMuted) return;
+                const melody = [523.25, 659.25, 783.99, 659.25, 1046.50];
+                melody.forEach((f, i) => {
+                    setTimeout(() => this.playOsc('triangle', f, i === 4 ? 0.6 : 0.18, 0.3), i * 140);
+                });
+            }
+        };
+        ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach(evt => {
+            window.addEventListener(evt, () => { try { AudioSys.init(); } catch(e){} }, { once: true });
+        });
+
+        /**
+         * 4. USER INTERFACE CONTROLLER
+         */
+        const UI = {
+            init: async function() {
+                await this.updateLeaderboard();
+                this.checkNameAvailability();
+            },
+            showNameModal: function() {
+                GameController.startGame();
+            },
+            hideNameModal: function() {},
+            checkNameAvailability: function() {
+                const inp = document.getElementById('player-name-input');
+                const badge = document.getElementById('name-status-badge');
+                const btnStart = document.getElementById('btn-start-game');
+                if (!inp || !badge) return false;
+                
+                const val = inp.value.trim();
+                if (val === '') {
+                    badge.innerHTML = '<span>✍️ กรุณาพิมพ์ชื่อเล่นของคุณเพื่อเริ่มเล่น</span>';
+                    badge.className = 'text-[11px] md:text-xs font-bold text-center mt-1 text-amber-800';
+                    if (btnStart) {
+                        btnStart.style.opacity = '0.65';
+                        btnStart.style.filter = 'grayscale(40%)';
+                    }
+                    return false;
+                }
+                
+                if (GameState.existingPlayerNames.has(val.toLowerCase())) {
+                    badge.innerHTML = `<span>❌ ชื่อ "${escapeHtml(val)}" มีผู้ใช้งานแล้ว กรุณาตั้งชื่ออื่น (เช่น ${escapeHtml(val)}1)</span>`;
+                    badge.className = 'text-[11px] md:text-xs font-bold text-center mt-1 text-rose-600';
+                    if (btnStart) {
+                        btnStart.style.opacity = '0.65';
+                        btnStart.style.filter = 'grayscale(40%)';
+                    }
+                    return false;
+                } else {
+                    badge.innerHTML = `<span>✅ ชื่อ "${escapeHtml(val)}" สามารถใช้งานได้ พร้อมลุย!</span>`;
+                    badge.className = 'text-[11px] md:text-xs font-bold text-center mt-1 text-emerald-800';
+                    if (btnStart) {
+                        btnStart.style.opacity = '1';
+                        btnStart.style.filter = 'none';
+                    }
+                    return true;
+                }
+            },
+            showNameAlert: function(msg) {
+                const badge = document.getElementById('name-status-badge');
+                if (badge) {
+                    badge.innerHTML = `<span class="text-rose-600 font-bold animate-bounce">${escapeHtml(msg)}</span>`;
+                }
+                AudioSys.playError();
+                const inp = document.getElementById('player-name-input');
+                if (inp) {
+                    inp.focus();
+                    inp.classList.add('border-rose-500', 'ring-2', 'ring-rose-300');
+                    setTimeout(() => inp.classList.remove('border-rose-500', 'ring-2', 'ring-rose-300'), 2500);
+                }
+            },
+            updateLeaderboard: async function() {
+                const container = document.getElementById('leaderboard-container');
+                container.innerHTML = '<div class="text-center text-slate-400 font-bold text-sm py-4 animate-pulse">กำลังโหลดข้อมูลอันดับ...</div>';
+                try {
+                    const data = await API.getLeaderboard();
+                    container.innerHTML = '';
+                    if (!data || data.length === 0) {
+                        container.innerHTML = '<div class="text-center text-slate-400 font-bold py-4">ยังไม่มีข้อมูลผู้เล่น เป็นคนแรกที่พิชิตคะแนน!</div>';
+                        return;
+                    }
+                    data.forEach((p, idx) => {
+                        if (p.name && String(p.name).trim() !== '') {
+                            GameState.existingPlayerNames.add(String(p.name).trim().toLowerCase());
+                        }
+                        const rank = p.rank || (idx + 1);
+                        let rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `<span class="inline-block w-6 text-center text-slate-400 text-sm font-bold">${rank}</span>`;
+                        let timeInfo = (p.time !== undefined && p.time > 0) ? `<div class="text-[11px] text-slate-400 font-bold text-right">⏱️ ${p.time}s</div>` : '';
+                        let item = document.createElement('div');
+                        item.className = `flex justify-between items-center p-2 md:p-2.5 rounded-2xl ${rank <= 3 ? 'bg-orange-50/90 border-2 border-orange-200 font-bold' : 'bg-white border border-slate-100'}`;
+                        item.innerHTML = `
+                            <div class="flex items-center gap-2 text-sm md:text-base font-bold text-slate-700 truncate max-w-[65%]">
+                                <span>${rankIcon}</span> <span class="truncate">${escapeHtml(p.name || 'ผู้เล่น')}</span>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-green-600 font-bold text-sm md:text-base whitespace-nowrap">${p.score} <span class="text-xs font-bold text-slate-400">pt</span></div>
+                                ${timeInfo}
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                    this.checkNameAvailability();
+                } catch(e) {
+                    container.innerHTML = '<div class="text-center text-rose-400 font-bold py-4">ดึงข้อมูลอันดับไม่สำเร็จ</div>';
+                }
+            },
+            showFeedback: function(msg, isSuccess) {
+                const fb = document.getElementById('ui-feedback');
+                const text = document.getElementById('ui-feedback-text');
+                text.innerText = msg;
+                text.className = `px-8 md:px-10 py-4 md:py-5 rounded-3xl text-xl md:text-2xl font-bold text-white shadow-2xl backdrop-blur-md border-[4px] ${isSuccess ? 'bg-green-500/95 border-green-300' : 'bg-rose-500/95 border-rose-300'}`;
+                
+                fb.classList.remove('opacity-0', 'scale-90');
+                fb.classList.add('opacity-100', 'scale-100');
+                setTimeout(() => {
+                    fb.classList.remove('opacity-100', 'scale-100');
+                    fb.classList.add('opacity-0', 'scale-90');
+                }, 2000);
+            },
+            updateHUD: function() {
+                document.getElementById('ui-score').innerText = GameState.score;
+                document.getElementById('ui-level').innerText = GameState.level;
+                document.getElementById('ui-qnum').innerText = `${GameState.totalCorrect} ข้อ`;
+                const comboBadge = document.getElementById('ui-combo-badge');
+                if (comboBadge) {
+                    if (GameState.streak >= 2) {
+                        comboBadge.classList.remove('hidden');
+                        comboBadge.innerText = `🔥 x${GameState.streak >= 3 ? 2 : 1.5}`;
+                    } else {
+                        comboBadge.classList.add('hidden');
+                    }
+                }
+            },
+            updateEnergyBar: function() {
+                const bar = document.getElementById('ui-energy-bar');
+                if (!bar) return;
+                const pct = Math.max(0, Math.min(100, (GameState.energy / GameState.maxEnergy) * 100));
+                bar.style.width = pct + '%';
+                
+                if (pct > 50) {
+                    bar.className = 'h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all duration-150 shadow-[0_0_8px_rgba(34,197,94,0.7)]';
+                } else if (pct > 25) {
+                    bar.className = 'h-full rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 transition-all duration-150 shadow-[0_0_8px_rgba(234,179,8,0.7)]';
+                } else {
+                    bar.className = 'h-full rounded-full bg-gradient-to-r from-rose-500 to-red-600 transition-all duration-150 shadow-[0_0_12px_rgba(244,63,94,0.9)] animate-pulse';
+                }
+            }
+        };
+        /**
+         * 4.2 HIGH-DEFINITION VECTOR FRUIT RENDERER (กราฟิกผลไม้คมชัดระดับ HD)
+         */
+        const FruitRenderer = {
+            draw: function(ctx, itemId, size = 64) {
+                ctx.save();
+                const s = size / 64;
+                ctx.scale(s, s);
+                
+                switch(itemId) {
+                    case 'strawberry':
+                        this.drawStrawberry(ctx);
+                        break;
+                    case 'apple':
+                        this.drawApple(ctx);
+                        break;
+                    case 'orange':
+                        this.drawOrange(ctx);
+                        break;
+                    case 'banana':
+                        this.drawBanana(ctx);
+                        break;
+                    case 'tomato':
+                        this.drawTomato(ctx);
+                        break;
+                    case 'watermelon':
+                        this.drawWatermelon(ctx);
+                        break;
+                    default:
+                        this.drawApple(ctx);
+                }
+                ctx.restore();
+            },
+            
+            drawStrawberry: function(ctx) {
+                // Red Strawberry Body
+                const grad = ctx.createRadialGradient(-6, -6, 4, 0, 4, 30);
+                grad.addColorStop(0, '#FF4D6D');
+                grad.addColorStop(0.7, '#E60039');
+                grad.addColorStop(1, '#990026');
+                ctx.fillStyle = grad;
+                
+                ctx.beginPath();
+                ctx.moveTo(0, 26);
+                ctx.bezierCurveTo(-22, 14, -26, -10, -18, -18);
+                ctx.bezierCurveTo(-10, -24, 10, -24, 18, -18);
+                ctx.bezierCurveTo(26, -10, 22, 14, 0, 26);
+                ctx.fill();
+                
+                // Yellow Seeds
+                ctx.fillStyle = '#FFF275';
+                const seeds = [
+                    [-8, -8], [8, -8], [0, -14],
+                    [-12, 2], [0, 0], [12, 2],
+                    [-6, 12], [6, 12], [0, 18]
+                ];
+                seeds.forEach(([sx, sy]) => {
+                    ctx.beginPath();
+                    ctx.ellipse(sx, sy, 1.8, 2.8, Math.PI / 10, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                
+                // Green Leaves / Calyx
+                ctx.fillStyle = '#22C55E';
+                ctx.strokeStyle = '#15803D';
+                ctx.lineWidth = 1.5;
+                const leaves = [
+                    [-14, -18, -22, -26, -10, -22],
+                    [-6, -20, 0, -30, 6, -20],
+                    [10, -22, 22, -26, 14, -18]
+                ];
+                leaves.forEach(([x1, y1, cx, cy, x2, y2]) => {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -18);
+                    ctx.quadraticCurveTo(cx, cy, x2, y2);
+                    ctx.quadraticCurveTo(0, -16, x1, y1);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+            },
+
+            drawApple: function(ctx) {
+                // Brown Stem
+                ctx.strokeStyle = '#5D4037';
+                ctx.lineWidth = 3.5;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(0, -18);
+                ctx.quadraticCurveTo(6, -28, 4, -32);
+                ctx.stroke();
+
+                // Green Leaf
+                ctx.fillStyle = '#22C55E';
+                ctx.strokeStyle = '#15803D';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(2, -24);
+                ctx.quadraticCurveTo(16, -34, 18, -22);
+                ctx.quadraticCurveTo(10, -18, 2, -24);
+                ctx.fill();
+                ctx.stroke();
+
+                // Red Apple Body
+                const grad = ctx.createRadialGradient(-8, -8, 5, 0, 4, 32);
+                grad.addColorStop(0, '#FF4B4B');
+                grad.addColorStop(0.6, '#DC2626');
+                grad.addColorStop(1, '#7F1D1D');
+                ctx.fillStyle = grad;
+
+                ctx.beginPath();
+                ctx.moveTo(0, -14);
+                ctx.bezierCurveTo(-14, -26, -30, -14, -30, 4);
+                ctx.bezierCurveTo(-30, 22, -14, 28, 0, 26);
+                ctx.bezierCurveTo(14, 28, 30, 22, 30, 4);
+                ctx.bezierCurveTo(30, -14, 14, -26, 0, -14);
+                ctx.fill();
+
+                // Gloss Highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx.beginPath();
+                ctx.ellipse(-12, -6, 7, 14, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill();
+            },
+
+            drawOrange: function(ctx) {
+                // Orange Body
+                const grad = ctx.createRadialGradient(-8, -8, 6, 0, 2, 32);
+                grad.addColorStop(0, '#FDBA74');
+                grad.addColorStop(0.5, '#FB923C');
+                grad.addColorStop(1, '#C2410C');
+                ctx.fillStyle = grad;
+
+                ctx.beginPath();
+                ctx.arc(0, 2, 28, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Top Leaf
+                ctx.fillStyle = '#22C55E';
+                ctx.strokeStyle = '#15803D';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, -26);
+                ctx.quadraticCurveTo(14, -36, 16, -24);
+                ctx.quadraticCurveTo(8, -22, 0, -26);
+                ctx.fill();
+                ctx.stroke();
+
+                // Stem
+                ctx.fillStyle = '#78350F';
+                ctx.beginPath();
+                ctx.arc(0, -26, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Gloss Highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx.beginPath();
+                ctx.ellipse(-10, -8, 6, 12, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill();
+            },
+
+            drawBanana: function(ctx) {
+                ctx.save();
+                ctx.rotate(-Math.PI / 12);
+                
+                // Banana Body
+                const grad = ctx.createLinearGradient(-26, -20, 26, 20);
+                grad.addColorStop(0, '#FEF08A');
+                grad.addColorStop(0.4, '#FACC15');
+                grad.addColorStop(0.9, '#EAB308');
+                grad.addColorStop(1, '#CA8A04');
+                ctx.fillStyle = grad;
+                ctx.strokeStyle = '#A16207';
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                ctx.moveTo(-28, 12);
+                ctx.bezierCurveTo(-16, -24, 18, -26, 28, -6);
+                ctx.bezierCurveTo(16, -14, -8, -12, -22, 18);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Green/Brown Stem and Tip
+                ctx.fillStyle = '#65A30D';
+                ctx.beginPath();
+                ctx.arc(-26, 14, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#78350F';
+                ctx.beginPath();
+                ctx.arc(28, -6, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            },
+
+            drawTomato: function(ctx) {
+                // Red Tomato Body
+                const grad = ctx.createRadialGradient(-8, -6, 5, 0, 4, 30);
+                grad.addColorStop(0, '#F87171');
+                grad.addColorStop(0.6, '#EF4444');
+                grad.addColorStop(1, '#991B1B');
+                ctx.fillStyle = grad;
+
+                ctx.beginPath();
+                ctx.arc(0, 4, 27, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 5-Point Green Calyx / Leaves
+                ctx.fillStyle = '#22C55E';
+                ctx.strokeStyle = '#15803D';
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < 5; i++) {
+                    const ang = (i * Math.PI * 2) / 5 - Math.PI / 2;
+                    const lx = Math.cos(ang) * 16;
+                    const ly = -22 + Math.sin(ang) * 9;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -22);
+                    ctx.lineTo(lx, ly);
+                    ctx.lineTo(Math.cos(ang + 0.3) * 6, -22 + Math.sin(ang + 0.3) * 4);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // Stem
+                ctx.strokeStyle = '#15803D';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(0, -22);
+                ctx.lineTo(0, -29);
+                ctx.stroke();
+
+                // Gloss Highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.beginPath();
+                ctx.ellipse(-10, -4, 6, 12, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill();
+            },
+
+            drawWatermelon: function(ctx) {
+                // Sliced Watermelon Wedge
+                ctx.save();
+                ctx.rotate(-Math.PI / 10);
+
+                // Green Rind Outer
+                ctx.fillStyle = '#15803D';
+                ctx.beginPath();
+                ctx.moveTo(-30, 20);
+                ctx.quadraticCurveTo(0, 36, 30, 20);
+                ctx.lineTo(30, 14);
+                ctx.quadraticCurveTo(0, 30, -30, 14);
+                ctx.closePath();
+                ctx.fill();
+
+                // White Rind Layer
+                ctx.fillStyle = '#ECFDF5';
+                ctx.beginPath();
+                ctx.moveTo(-30, 15);
+                ctx.quadraticCurveTo(0, 30, 30, 15);
+                ctx.lineTo(28, 10);
+                ctx.quadraticCurveTo(0, 24, -28, 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // Red Flesh
+                const grad = ctx.createRadialGradient(0, -10, 4, 0, 10, 32);
+                grad.addColorStop(0, '#FB7185');
+                grad.addColorStop(0.7, '#E11D48');
+                grad.addColorStop(1, '#BE123C');
+                ctx.fillStyle = grad;
+
+                ctx.beginPath();
+                ctx.moveTo(0, -24);
+                ctx.lineTo(28, 10);
+                ctx.quadraticCurveTo(0, 24, -28, 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // Black Seeds
+                ctx.fillStyle = '#0F172A';
+                const seeds = [
+                    [-8, 0], [8, 0],
+                    [-14, 8], [0, 8], [14, 8],
+                    [-4, -10], [4, -10]
+                ];
+                seeds.forEach(([sx, sy]) => {
+                    ctx.beginPath();
+                    ctx.ellipse(sx, sy, 1.8, 3, Math.PI / 12, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                ctx.restore();
+            }
+        };
+
+        /**
+         * 4.5 CONVEYOR BELT SUBSYSTEM (สายพานลำเลียงผลไม้)
+         */
+        const ConveyorBelt = {
+            xOffset: 0,
+            speed: 65, // Comfortable moving speed
+            items: [],
+            slotSpacing: 200, // Generous spacing so fruits never crowd
+            
+            init: function() {
+                this.items = [];
+                const canvasW = Renderer.layout.width || window.innerWidth;
+                const count = Math.ceil(canvasW / this.slotSpacing) + 3;
+                for (let i = 0; i < count; i++) {
+                    const startX = canvasW - (i * this.slotSpacing) + 50;
+                    this.items.push(this.createRandomItem(startX));
+                }
+                this.items.sort((a, b) => a.x - b.x);
+            },
+            
+            createRandomItem: function(x) {
+                const pool = GAME_CONFIG.items;
+                const picked = pool[Math.floor(Math.random() * pool.length)];
+                return {
+                    baseItem: picked,
+                    x: x,
+                    id: 'belt_' + Math.random().toString(36).substring(2, 9),
+                    bobOffset: Math.random() * Math.PI * 2
+                };
+            },
+            
+            update: function(dt) {
+                const canvasW = Renderer.layout.width || window.innerWidth;
+                this.xOffset = (this.xOffset + this.speed * dt) % 36;
+                
+                // Move items smoothly to the left
+                for (let i = 0; i < this.items.length; i++) {
+                    this.items[i].x -= this.speed * dt;
+                }
+                
+                // Remove offscreen items
+                this.items = this.items.filter(it => it.x > -100);
+                
+                // Find rightmost item X
+                let maxX = 0;
+                for (const it of this.items) {
+                    if (it.x > maxX) maxX = it.x;
+                }
+                
+                // Spawn new fruits from right edge
+                while (maxX < canvasW + this.slotSpacing * 2) {
+                    const nextX = Math.max(canvasW + 60, maxX + this.slotSpacing);
+                    const newItem = this.createRandomItem(nextX);
+                    this.items.push(newItem);
+                    maxX = nextX;
+                }
+            },
+            
+            draw: function(ctx) {
+                const w = Renderer.layout.width;
+                const h = Renderer.layout.height;
+                const beltH = 135;
+                const beltY = h - beltH;
+                
+                // 1. Conveyor Belt Track Background (Deep Metallic Navy)
+                const beltGrad = ctx.createLinearGradient(0, beltY, 0, h);
+                beltGrad.addColorStop(0, '#090D16');
+                beltGrad.addColorStop(0.12, '#1E293B');
+                beltGrad.addColorStop(0.85, '#1E293B');
+                beltGrad.addColorStop(1, '#0F172A');
+                ctx.fillStyle = beltGrad;
+                ctx.fillRect(0, beltY, w, beltH);
+                
+                // 2. Top Metallic Guide Rail
+                ctx.fillStyle = '#475569';
+                ctx.fillRect(0, beltY - 6, w, 6);
+                ctx.fillStyle = '#94A3B8';
+                ctx.fillRect(0, beltY - 4, w, 2);
+                
+                // 3. Moving Rubber Belt Ribs / Slats
+                ctx.strokeStyle = '#0B1120';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                const slatGap = 36;
+                const startX = -(this.xOffset % slatGap);
+                for (let x = startX; x < w + slatGap; x += slatGap) {
+                    ctx.moveTo(x, beltY + 4);
+                    ctx.lineTo(x, h - 4);
+                }
+                ctx.stroke();
+                
+                // Slat Highlights
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let x = startX + 2; x < w + slatGap; x += slatGap) {
+                    ctx.moveTo(x, beltY + 6);
+                    ctx.lineTo(x, h - 6);
+                }
+                ctx.stroke();
+                
+                // 4. Draw Fruits on Belt
+                const centerY = beltY + beltH * 0.46;
+                const time = performance.now() / 1000;
+                
+                for (let i = 0; i < this.items.length; i++) {
+                    const it = this.items[i];
+                    const bobY = Math.sin(time * 3 + it.bobOffset) * 2;
+                    this.drawBeltFruit(ctx, it.baseItem, it.x, centerY + bobY);
+                }
+            },
+            
+            drawBeltFruit: function(ctx, baseItem, x, y) {
+                ctx.save();
+                ctx.translate(x, y);
+                
+                // Soft shadow on conveyor belt
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.beginPath();
+                ctx.ellipse(0, 36, 32, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw Ultra-Sharp Vector Fruit
+                FruitRenderer.draw(ctx, baseItem.id, 72);
+                
+                // Circular Weight Badge (Crisp white circle with bold border)
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+                ctx.shadowBlur = 6;
+                ctx.shadowOffsetY = 2;
+                
+                ctx.fillStyle = '#FFFFFF';
+                ctx.strokeStyle = '#0F172A';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(22, 20, 17, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.shadowColor = 'transparent';
+                ctx.fillStyle = '#0F172A';
+                ctx.font = '700 14px Prompt, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${baseItem.weight}`, 22, 21);
+                
+                ctx.restore();
+            },
+            
+            takeItemAt: function(screenX, screenY) {
+                const h = Renderer.layout.height;
+                const beltY = h - 145;
+                if (screenY < beltY - 20 || screenY > h + 20) return null;
+                
+                const centerY = beltY + 135 * 0.46;
+                for (let i = 0; i < this.items.length; i++) {
+                    const it = this.items[i];
+                    const dist = Math.hypot(screenX - it.x, screenY - centerY);
+                    if (dist < 52) {
+                        const picked = this.items.splice(i, 1)[0];
+                        return picked.baseItem;
+                    }
+                }
+                return null;
+            }
+        };
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, function(m) {
+                return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+            });
+        }
+
+        /**
+         * 5. GAME CONTROLLER
+         */
+        const GameController = {
+            startGame: function(isReplay = false) {
+                try { AudioSys.init(); AudioSys.playClick(); } catch(e) {}
+                
+                if (!isReplay) {
+                    const inpEl = document.getElementById('player-name-input');
+                    let nameInput = inpEl ? inpEl.value.trim() : "";
+                    
+                    if (nameInput === "") {
+                        UI.showNameAlert("กรุณากรอกชื่อเล่นก่อนเริ่มเล่นเกมครับ");
+                        return;
+                    }
+                    
+                    if (GameState.existingPlayerNames.has(nameInput.toLowerCase())) {
+                        UI.showNameAlert(`ชื่อ "${nameInput}" มีผู้ใช้แล้ว กรุณาตั้งชื่ออื่นครับ`);
+                        return;
+                    }
+                    
+                    GameState.playerName = nameInput;
+                    GameState.existingPlayerNames.add(nameInput.toLowerCase());
+                }
+
+                GameState.sessionID = 'SESS_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+                GameState.score = 0; 
+                GameState.level = 1; 
+                GameState.currentQNum = 1;
+                GameState.totalCorrect = 0; 
+                GameState.totalWrong = 0; 
+                GameState.streak = 0;
+                GameState.maxStreak = 0;
+                GameState.maxEnergy = 90;
+                GameState.energy = 90;
+                GameState.isModalOpen = false;
+                GameState.isCheckingBalance = false;
+                GameState.balanceHoldTime = 0;
+                if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
+                GameState.startTime = Date.now();
+                
+                UI.hideNameModal();
+                const screenHome = document.getElementById('screen-home');
+                const screenEnd = document.getElementById('screen-end');
+                const modalSuccess = document.getElementById('modal-success');
+                const screenGame = document.getElementById('screen-game');
+                
+                if (screenHome) { screenHome.classList.add('hidden'); screenHome.style.display = 'none'; }
+                if (screenEnd) { screenEnd.classList.add('hidden'); screenEnd.style.display = 'none'; }
+                if (modalSuccess) { modalSuccess.classList.add('hidden'); modalSuccess.style.display = 'none'; }
+                if (screenGame) { screenGame.classList.remove('hidden'); screenGame.style.display = 'block'; }
+                
+                UI.updateHUD();
+                UI.updateEnergyBar();
+                this.generateQuestion();
+                
+                if (!Renderer.isRunning) { 
+                    Renderer.init();
+                } else {
+                    Renderer.resize();
+                }
+                ARController.init(); 
+                ConveyorBelt.init();
+            },
+            replayCurrentPlayer: function() {
+                // Replay immediately with the current player name to beat high score!
+                this.startGame(true);
+            },
+            showHint: function() {
+                AudioSys.playClick();
+                const target = GameState.targetWeightLeft;
+                const right = this.getRightWeight();
+                const diff = Math.round((target - right) * 100) / 100;
+                
+                if (diff === 0) {
+                    UI.showFeedback("💡 ตาชั่งสมดุลพอดีแล้ว!", true);
+                } else if (diff > 0) {
+                    UI.showFeedback(`💡 ต้องการอีก ${diff} กิโลกรัม หยิบผลไม้จากสายพานใส่ได้เลย!`, true);
+                } else {
+                    UI.showFeedback(`💡 หนักเกินไป ${Math.abs(diff)} กิโลกรัม แตะผลไม้ในตะกร้าเพื่อนำออก`, false);
+                }
+            },
+            generateQuestion: function() {
+                GameState.attempts = 0; 
+                GameState.rightBasketItems = []; 
+                GameState.leftBasketItems = [];
+                GameState.draggedItem = null; 
+                GameState.isDragging = false;
+                GameState.isCheckingBalance = false;
+                GameState.balanceHoldTime = 0;
+                
+                let targetWeight = 1.0;
+                if (GameState.level === 1) {
+                    // Level 1: Whole numbers (1 to 5 kg)
+                    targetWeight = Math.floor(Math.random() * 5) + 1;
+                } else if (GameState.level === 2) {
+                    // Level 2: Halves (0.5 to 4.5 kg)
+                    targetWeight = (Math.floor(Math.random() * 8) + 1) * 0.5;
+                } else if (GameState.level === 3) {
+                    // Level 3: Quarters (0.75 to 6.25 kg)
+                    targetWeight = (Math.floor(Math.random() * 15) + 3) * 0.25;
+                } else {
+                    // Level 4+: Master level (1.25 to 8.75 kg)
+                    targetWeight = (Math.floor(Math.random() * 25) + 5) * 0.25;
+                }
+
+                GameState.targetWeightLeft = targetWeight;
+                const qText = `ตะกร้าซ้ายมีน้ำหนัก ${targetWeight} กิโลกรัม — ใส่ผลไม้ในตะกร้าขวาให้สมดุลพอดี`;
+                document.getElementById('ui-question-text').innerText = qText;
+                
+                // Add Left basket items representation
+                GameState.leftBasketItems = this.createVisualItemsForWeight(targetWeight);
+            },
+            createVisualItemsForWeight: function(weight) {
+                const items = [];
+                let remaining = weight;
+                const sorted = [...GAME_CONFIG.items].sort((a, b) => b.weight - a.weight);
+                for (const item of sorted) {
+                    while (remaining >= item.weight - 0.001) {
+                        items.push({ baseItem: item, x: 0, y: 0 });
+                        remaining = Math.round((remaining - item.weight) * 100) / 100;
+                    }
+                }
+                if (items.length === 0) {
+                    items.push({ baseItem: { id: 'apple', emoji: '🍎', name: 'แอปเปิล', weight: weight }, x: 0, y: 0 });
+                }
+                return items;
+            },
+            getRightWeight: function() {
+                const sum = GameState.rightBasketItems.reduce((acc, item) => acc + item.baseItem.weight, 0);
+                return Math.round(sum * 100) / 100;
+            },
+            clearRightBasket: function() {
+                if (GameState.rightBasketItems.length > 0) {
+                    AudioSys.playDrop();
+                    GameState.rightBasketItems = [];
+                    GameState.isCheckingBalance = false;
+                    GameState.balanceHoldTime = 0;
+                }
+            },
+            triggerSuccess: function() {
+                if (GameState.isModalOpen) return;
+                GameState.isModalOpen = true;
+                
+                AudioSys.playSuccess();
+                Particles.createExplosion(Renderer.layout.rightBasketCenter.x, Renderer.layout.rightBasketCenter.y);
+                
+                // Increment streak
+                GameState.streak++;
+                if (GameState.streak > GameState.maxStreak) GameState.maxStreak = GameState.streak;
+                
+                // Multiplier points calculation
+                let multiplier = 1;
+                let bonusTxt = '+10 คะแนน';
+                if (GameState.streak === 2) {
+                    multiplier = 1.5;
+                    bonusTxt = '+15 คะแนน (x1.5)';
+                } else if (GameState.streak >= 3) {
+                    multiplier = 2.0;
+                    bonusTxt = `+20 คะแนน (x2 FEVER 🔥)`;
+                }
+                const earned = Math.round(10 * multiplier);
+                GameState.score += earned;
+                GameState.totalCorrect++;
+                
+                // Dynamically increase difficulty level as player gets more correct answers
+                if (GameState.totalCorrect >= 12) {
+                    GameState.level = 4;
+                } else if (GameState.totalCorrect >= 7) {
+                    GameState.level = 3;
+                } else if (GameState.totalCorrect >= 3) {
+                    GameState.level = 2;
+                }
+                
+                // Refill Energy (+8 seconds, bonus +4s for streak >= 2, capped at 90s)
+                const energyRefill = 8 + (GameState.streak >= 2 ? 4 : 0);
+                GameState.energy = Math.min(GameState.maxEnergy, GameState.energy + energyRefill);
+                
+                UI.updateHUD();
+                UI.updateEnergyBar();
+                
+                // Populate and show victory modal
+                const modal = document.getElementById('modal-success');
+                document.getElementById('popup-weight-left').innerText = `${GameState.targetWeightLeft} kg`;
+                document.getElementById('popup-weight-right').innerText = `${this.getRightWeight()} kg`;
+                document.getElementById('popup-earned-score').innerText = bonusTxt;
+                document.getElementById('popup-energy-tag').innerText = `⚡ เติมพลังงาน +${energyRefill}s`;
+                
+                const comboTag = document.getElementById('popup-combo-tag');
+                if (GameState.streak >= 2) {
+                    comboTag.classList.remove('hidden');
+                    comboTag.innerText = `🔥 STREAK COMBO x${multiplier}!`;
+                } else {
+                    comboTag.classList.add('hidden');
+                }
+                
+                modal.classList.remove('hidden');
+                
+                // Auto advance after 2.0 seconds in endless mode
+                if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
+                GameState.autoNextTimeout = setTimeout(() => {
+                    this.nextQuestion();
+                }, 2000);
+            },
+            nextQuestion: function() {
+                if (GameState.autoNextTimeout) {
+                    clearTimeout(GameState.autoNextTimeout);
+                    GameState.autoNextTimeout = null;
+                }
+                document.getElementById('modal-success').classList.add('hidden');
+                GameState.isModalOpen = false;
+                GameState.isCheckingBalance = false;
+                GameState.balanceHoldTime = 0;
+                
+                // Endless Mode: Continue non-stop until time/energy runs out!
+                GameState.currentQNum++; 
+                UI.updateHUD(); 
+                this.generateQuestion(); 
+            },
+            endGame: function(isTimeout = false) {
+                AudioSys.playVictory();
+                if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
+                document.getElementById('modal-success').classList.add('hidden');
+                document.getElementById('screen-game').classList.add('hidden');
+                document.getElementById('screen-end').classList.remove('hidden');
+                
+                const timeSpent = Math.max(1, Math.floor((Date.now() - GameState.startTime) / 1000));
+                document.getElementById('end-player-name').innerText = `น้อง${GameState.playerName} ${isTimeout ? '⚡ (หมดเวลา!)' : '🎉'}`;
+                document.getElementById('end-score').innerText = GameState.score;
+                document.getElementById('end-correct').innerText = `${GameState.totalCorrect} ข้อ`;
+                document.getElementById('end-wrong').innerText = `${GameState.totalWrong} ครั้ง`;
+                document.getElementById('end-level').innerText = `Lv.${GameState.level} (คอมโบสูงสุด: ${GameState.maxStreak}x)`;
+                document.getElementById('end-time').innerText = `${timeSpent} วินาที`;
+
+                const rankTextEl = document.getElementById('end-rank-text');
+                if (rankTextEl) rankTextEl.innerText = "กำลังคำนวณอันดับของคุณ...";
+
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                const formattedTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+                const payload = {
+                    Timestamp: formattedTime, 
+                    SessionID: GameState.sessionID,
+                    PlayerName: GameState.playerName,
+                    Score: GameState.score, 
+                    HighestLevel: GameState.level, 
+                    CorrectAnswers: GameState.totalCorrect,
+                    WrongAttempts: GameState.totalWrong, 
+                    PlayTime: timeSpent
+                };
+
+                // Save score & calculate rank
+                API.saveScore(payload).then(async () => {
+                    await UI.updateLeaderboard();
+                    const leaderboard = await API.getLeaderboard();
+                    
+                    let playerRank = 1;
+                    if (Array.isArray(leaderboard) && leaderboard.length > 0) {
+                        const foundIdx = leaderboard.findIndex(p => p.name === GameState.playerName && p.score === GameState.score);
+                        if (foundIdx !== -1) {
+                            playerRank = leaderboard[foundIdx].rank || (foundIdx + 1);
+                        } else {
+                            playerRank = leaderboard.filter(p => p.score > GameState.score).length + 1;
+                        }
+                    }
+                    if (rankTextEl) {
+                        if (playerRank <= 3) {
+                            const medal = playerRank === 1 ? '🥇 ยอดเยี่ยมที่สุด อันดับ 1!' : playerRank === 2 ? '🥈 สุดยอดมาก อันดับ 2!' : '🥉 เยี่ยมยอด อันดับ 3!';
+                            rankTextEl.innerText = `🎉 ติด Top 3! คุณได้ ${medal}`;
+                        } else {
+                            rankTextEl.innerText = `🏅 คุณได้ อันดับที่ ${playerRank} บนตารางคะแนน!`;
+                        }
+                    }
+                });
+            },
+            confirmExit: function() {
+                if (confirm("ต้องการกลับไปหน้าแรกหรือไม่? คะแนนรอบปัจจุบันจะไม่ถูกบันทึก")) {
+                    this.goHome();
+                }
+            },
+            goHome: function() {
+                if (GameState.autoNextTimeout) clearTimeout(GameState.autoNextTimeout);
+                document.getElementById('modal-success').classList.add('hidden');
+                document.getElementById('screen-end').classList.add('hidden');
+                document.getElementById('screen-game').classList.add('hidden');
+                const home = document.getElementById('screen-home');
+                if (home) {
+                    home.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+                    home.style.display = 'flex';
+                }
+                
+                // Clear name input so that the same name cannot be accidentally re-used from home
+                const inp = document.getElementById('player-name-input');
+                if (inp) {
+                    inp.value = '';
+                }
+                UI.checkNameAvailability();
+                UI.updateLeaderboard();
+            }
+        };
+
+        /**
+         * Helper for Drawing Rounded Rectangles (100% Canvas Compatibility)
+         */
+        function drawRoundedRect(ctx, x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        /**
+         * 6. CANVAS RENDERER & 2D PHYSICS
+         */
+        const Renderer = {
+            canvas: null, 
+            ctx: null, 
+            isRunning: false, 
+            lastTime: 0,
+            scaleAngle: 0, 
+            targetScaleAngle: 0,
+            scaleVelocity: 0,
+            layout: { 
+                pivotX: 0, 
+                pivotY: 0, 
+                beamLength: 0, 
+                basketW: 0, 
+                basketH: 0, 
+                basketDropDist: 0, 
+                leftBasketCenter: { x: 0, y: 0 }, 
+                rightBasketCenter: { x: 0, y: 0 } 
+            },
+
+            init: function() {
+                this.canvas = document.getElementById('game-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                InputSys.init(this.canvas);
+                this.isRunning = true;
+                this.lastTime = performance.now();
+                requestAnimationFrame((t) => this.loop(t));
+            },
+            resize: function() {
+                const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+                this.dpr = dpr;
+                const w = window.innerWidth || document.documentElement.clientWidth || 800;
+                const h = window.innerHeight || document.documentElement.clientHeight || 600;
+                
+                this.canvas.width = Math.round(w * dpr);
+                this.canvas.height = Math.round(h * dpr);
+                this.canvas.style.width = w + 'px';
+                this.canvas.style.height = h + 'px';
+                
+                this.layout.width = w;
+                this.layout.height = h;
+                this.layout.pivotX = w / 2;
+                this.layout.pivotY = Math.max(140, h * 0.40);
+                this.layout.beamLength = Math.min(w * 0.78, 680); 
+                this.layout.basketW = Math.min(this.layout.beamLength * 0.36, 170);
+                this.layout.basketH = this.layout.basketW * 0.35;
+                this.layout.basketDropDist = Math.min(h * 0.22, 160);
+            },
+            loop: function(time) {
+                if (!this.isRunning) return;
+                const dt = Math.min((time - this.lastTime) / 1000, 0.1); 
+                this.lastTime = time;
+                this.update(dt); 
+                this.draw();
+                requestAnimationFrame((t) => this.loop(t));
+            },
+            update: function(dt) {
+                // Physics: spring-damper rotation for the scale beam
+                const diff = GameController.getRightWeight() - GameState.targetWeightLeft;
+                const clampedDiff = Math.max(-GAME_CONFIG.scaleMaxWeightDiff, Math.min(GAME_CONFIG.scaleMaxWeightDiff, diff));
+                this.targetScaleAngle = (clampedDiff / GAME_CONFIG.scaleMaxWeightDiff) * GAME_CONFIG.scaleMaxAngle;
+                
+                // Smooth damping spring
+                const springForce = (this.targetScaleAngle - this.scaleAngle) * 25;
+                this.scaleVelocity += springForce * dt;
+                this.scaleVelocity *= Math.pow(0.05, dt); // damping
+                this.scaleAngle += this.scaleVelocity * dt;
+
+                // Update Conveyor Belt & Input
+                ConveyorBelt.update(dt);
+                InputSys.update(dt);
+
+                // Energy depletion & Auto-Balance check
+                const isGameVisible = !document.getElementById('screen-game').classList.contains('hidden');
+                if (this.isRunning && isGameVisible && !GameState.isModalOpen) {
+                    // Deplete energy smoothly
+                    GameState.energy = Math.max(0, GameState.energy - dt);
+                    UI.updateEnergyBar();
+
+                    if (GameState.energy <= 0) {
+                        GameController.endGame(true); // Energy Timeout!
+                        return;
+                    }
+
+                    // Automatic balance detection
+                    const rightW = GameController.getRightWeight();
+                    const targetW = GameState.targetWeightLeft;
+                    const isBalanced = Math.abs(rightW - targetW) < 0.001 && GameState.rightBasketItems.length > 0;
+                    
+                    if (isBalanced && !GameState.isDragging && !GameState.isCheckingBalance) {
+                        GameState.balanceHoldTime += dt;
+                        if (GameState.balanceHoldTime >= 0.35) { // 350ms balance hold
+                            GameState.isCheckingBalance = true;
+                            GameController.triggerSuccess();
+                        }
+                    } else {
+                        GameState.balanceHoldTime = 0;
+                    }
+                }
+            },
+            draw: function() {
+                const ctx = this.ctx; 
+                const w = this.layout.width || this.canvas.width; 
+                const h = this.layout.height || this.canvas.height;
+                
+                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                ctx.save();
+                if (this.dpr) ctx.scale(this.dpr, this.dpr);
+
+                // 1. Draw Camera Feed if active
+                if (ARController.cameraActive && ARController.lastFrame) {
+                    const video = ARController.lastFrame;
+                    const vRatio = (video.videoWidth || 640) / (video.videoHeight || 480);
+                    const cRatio = w / h;
+                    let drawW, drawH, startX, startY;
+                    if (cRatio > vRatio) { 
+                        drawW = w; 
+                        drawH = w / vRatio; 
+                        startX = 0; 
+                        startY = (h - drawH) / 2; 
+                    } else { 
+                        drawH = h; 
+                        drawW = h * vRatio; 
+                        startX = (w - drawW) / 2; 
+                        startY = 0; 
+                    }
+                    ctx.save(); 
+                    ctx.scale(-1, 1); 
+                    ctx.drawImage(video, -startX - drawW, startY, drawW, drawH); 
+                    ctx.restore();
+
+                    // Soft dark overlay to make scale and HUD pop
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+                    ctx.fillRect(0, 0, w, h);
+                } else {
+                    // Soft gradient background for non-camera mode
+                    const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+                    bgGrad.addColorStop(0, '#1E293B');
+                    bgGrad.addColorStop(1, '#0F172A');
+                    ctx.fillStyle = bgGrad;
+                    ctx.fillRect(0, 0, w, h);
+                }
+
+                // 2. Draw Conveyor Belt with rolling fruits at bottom
+                ConveyorBelt.draw(ctx);
+
+                // 3. Draw Scale Base Stand
+                this.drawScaleBase(ctx);
+
+                // 4. Draw Rotating Beam and Hanging Baskets
+                ctx.save();
+                ctx.translate(this.layout.pivotX, this.layout.pivotY);
+                ctx.rotate(this.scaleAngle);
+                
+                this.drawBeam(ctx);
+                const halfBeam = this.layout.beamLength / 2;
+                const cosA = Math.cos(this.scaleAngle);
+                const sinA = Math.sin(this.scaleAngle);
+
+                // Exact trigonometric basket centers (100% immune to getTransform/matrix errors)
+                this.layout.leftBasketCenter = {
+                    x: this.layout.pivotX - halfBeam * cosA,
+                    y: this.layout.pivotY - halfBeam * sinA + this.layout.basketDropDist
+                };
+                this.layout.rightBasketCenter = {
+                    x: this.layout.pivotX + halfBeam * cosA,
+                    y: this.layout.pivotY + halfBeam * sinA + this.layout.basketDropDist
+                };
+                
+                // Left Basket (hanging straight down)
+                ctx.save(); 
+                ctx.translate(-halfBeam, 0); 
+                ctx.rotate(-this.scaleAngle);
+                this.drawBasket(ctx, 'left', GameState.targetWeightLeft, '#3B82F6');
+                ctx.restore();
+
+                // Right Basket (hanging straight down)
+                ctx.save(); 
+                ctx.translate(halfBeam, 0); 
+                ctx.rotate(-this.scaleAngle);
+                this.drawBasket(ctx, 'right', GameController.getRightWeight(), '#F97316');
+                ctx.restore();
+
+                ctx.restore();
+
+                // 5. Draw Items inside Baskets
+                this.drawBasketItems(ctx, GameState.leftBasketItems, this.layout.leftBasketCenter);
+                this.drawBasketItems(ctx, GameState.rightBasketItems, this.layout.rightBasketCenter);
+
+                // 6. Draw Currently Dragged Item
+                if (GameState.isDragging && GameState.draggedItem) {
+                    this.drawItem(ctx, GameState.draggedItem.baseItem, InputSys.pointer.x, InputSys.pointer.y, 1.25, true);
+                }
+
+                // 7. Draw Particles and Explosions
+                Particles.updateAndDraw(ctx, 0.016);
+
+                // 8. Draw AR Hand Skeleton & Cursor
+                this.drawARCursor(ctx);
+
+                ctx.restore();
+            },
+            drawScaleBase: function(ctx) {
+                const px = this.layout.pivotX; 
+                const py = this.layout.pivotY;
+                const bottomY = (this.layout.height || this.canvas.height) - 135;
+                
+                // Triangular Stand Column
+                const grad = ctx.createLinearGradient(px - 60, py, px + 60, bottomY);
+                grad.addColorStop(0, '#475569');
+                grad.addColorStop(1, '#1E293B');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(px - 16, py); 
+                ctx.lineTo(px + 16, py);
+                ctx.lineTo(px + 65, bottomY); 
+                ctx.lineTo(px - 65, bottomY);
+                ctx.closePath();
+                ctx.fill();
+
+                // Heavy Base Foot
+                ctx.fillStyle = '#334155';
+                ctx.strokeStyle = '#64748B';
+                ctx.lineWidth = 3;
+                drawRoundedRect(ctx, px - 90, bottomY - 10, 180, 20, 10);
+                ctx.fill();
+                ctx.stroke();
+
+                // Center Pivot Pin
+                ctx.fillStyle = '#F59E0B';
+                ctx.beginPath(); 
+                ctx.arc(px, py, 16, 0, Math.PI * 2); 
+                ctx.fill();
+                ctx.strokeStyle = '#D97706'; 
+                ctx.lineWidth = 4; 
+                ctx.stroke();
+            },
+            drawBeam: function(ctx) {
+                const hl = this.layout.beamLength / 2;
+                
+                // Main Beam Bar
+                ctx.strokeStyle = '#84CC16'; // Lime-500
+                ctx.lineCap = 'round'; 
+                ctx.lineWidth = 16;
+                ctx.beginPath(); 
+                ctx.moveTo(-hl, 0); 
+                ctx.lineTo(hl, 0); 
+                ctx.stroke();
+                
+                // Highlight Strip
+                ctx.strokeStyle = '#BEF264'; 
+                ctx.lineWidth = 4;
+                ctx.beginPath(); 
+                ctx.moveTo(-hl + 12, -4); 
+                ctx.lineTo(hl - 12, -4); 
+                ctx.stroke();
+
+                // Left & Right Pivot Rings
+                [-hl, hl].forEach(pos => {
+                    ctx.fillStyle = '#F59E0B';
+                    ctx.strokeStyle = '#B45309';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(pos, 0, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+            },
+            drawBasket: function(ctx, side, totalWeight, bowlColor = '#F97316') {
+                const bw = this.layout.basketW; 
+                const drop = this.layout.basketDropDist;
+                
+                // Hanging Strings / Chains
+                ctx.strokeStyle = 'rgba(203, 213, 225, 0.9)'; 
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(0, 0); 
+                ctx.lineTo(-bw / 2 + 10, drop);
+                ctx.moveTo(0, 0); 
+                ctx.lineTo(bw / 2 - 10, drop);
+                ctx.stroke();
+
+                // Bowl Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.beginPath();
+                ctx.arc(0, drop + 4, bw / 2, 0, Math.PI, false);
+                ctx.fill();
+
+                // Bowl Body
+                ctx.fillStyle = bowlColor; 
+                ctx.strokeStyle = '#FFFFFF'; 
+                ctx.lineWidth = 3;
+                ctx.beginPath(); 
+                ctx.arc(0, drop, bw / 2, 0, Math.PI, false); 
+                ctx.closePath();
+                ctx.fill(); 
+                ctx.stroke();
+
+                // Inner rim ellipse
+                ctx.fillStyle = bowlColor === '#3B82F6' ? '#2563EB' : '#EA580C';
+                ctx.beginPath(); 
+                ctx.ellipse(0, drop, bw / 2, 10, 0, 0, Math.PI * 2); 
+                ctx.fill(); 
+                ctx.stroke();
+                
+                // Weight Pill Badge below basket
+                const labelY = drop + bw / 2 + 22;
+                ctx.fillStyle = 'white'; 
+                ctx.strokeStyle = '#1E293B'; 
+                ctx.lineWidth = 3;
+                drawRoundedRect(ctx, -50, labelY - 16, 100, 32, 16); 
+                ctx.fill(); 
+                ctx.stroke();
+                
+                ctx.fillStyle = '#0F172A'; 
+                ctx.font = '700 16px Prompt'; 
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${totalWeight} kg`, 0, labelY + 1);
+            },
+            drawBasketItems: function(ctx, items, centerObj) {
+                const count = items.length;
+                if (count === 0) return;
+                
+                items.forEach((itemObj, i) => {
+                    let ox = 0; 
+                    let oy = -20 - (Math.floor(i / 2) * 28);
+                    if (count > 1) {
+                        ox = (i % 2 === 0) ? -20 : 20;
+                    }
+                    this.drawItem(ctx, itemObj.baseItem, centerObj.x + ox, centerObj.y + oy, 0.85, false);
+                });
+            },
+            drawItem: function(ctx, baseItem, x, y, scale = 1, withShadow = true) {
+                ctx.save(); 
+                ctx.translate(x, y); 
+                ctx.scale(scale, scale);
+                
+                if (withShadow) { 
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'; 
+                    ctx.shadowBlur = 10; 
+                    ctx.shadowOffsetY = 10; 
+                }
+                
+                // Ultra-sharp vector fruit
+                FruitRenderer.draw(ctx, baseItem.id, 62);
+                
+                // Circular/Rounded Weight Badge
+                ctx.shadowColor = 'transparent'; 
+                ctx.fillStyle = '#FFFFFF'; 
+                ctx.strokeStyle = '#1E293B'; 
+                ctx.lineWidth = 2.5;
+                ctx.beginPath(); 
+                ctx.arc(20, 18, 15, 0, Math.PI * 2); 
+                ctx.fill(); 
+                ctx.stroke();
+
+                ctx.fillStyle = '#0F172A'; 
+                ctx.font = '700 12px Prompt';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${baseItem.weight}`, 20, 19);
+                ctx.restore();
+            },
+            drawARCursor: function(ctx) {
+                const ptr = InputSys.pointer;
+                const w = this.layout.width || this.canvas.width; 
+                const h = this.layout.height || this.canvas.height;
+                
+                // Draw MediaPipe Hand Skeleton if in AR Camera mode
+                if (!GameState.isSimulating && ARController.lastHandLandmarks) {
+                    const lms = ARController.lastHandLandmarks;
+                    ctx.save();
+                    const getPt = (lm) => ({ x: w - (lm.x * w), y: lm.y * h });
+                    
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)'; 
+                    ctx.lineWidth = 4; 
+                    ctx.lineCap = 'round'; 
+                    ctx.lineJoin = 'round';
+                    
+                    const connections = [
+                        [0,1],[1,2],[2,3],[3,4],
+                        [0,5],[5,6],[6,7],[7,8],
+                        [5,9],[9,10],[10,11],[11,12],
+                        [9,13],[13,14],[14,15],[15,16],
+                        [13,17],[17,18],[18,19],[19,20],
+                        [0,17]
+                    ];
+                    
+                    ctx.beginPath();
+                    connections.forEach(conn => {
+                        const p1 = getPt(lms[conn[0]]); 
+                        const p2 = getPt(lms[conn[1]]);
+                        ctx.moveTo(p1.x, p1.y); 
+                        ctx.lineTo(p2.x, p2.y);
+                    });
+                    ctx.stroke();
+                    
+                    // Landmark points
+                    ctx.fillStyle = '#FFFFFF';
+                    lms.forEach(lm => { 
+                        const p = getPt(lm); 
+                        ctx.beginPath(); 
+                        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); 
+                        ctx.fill(); 
+                    });
+                    ctx.restore();
+                }
+
+                // Draw Cursor Ring
+                ctx.save();
+                ctx.beginPath(); 
+                ctx.arc(ptr.x, ptr.y, ptr.isPinching ? 14 : 22, 0, Math.PI * 2);
+                ctx.fillStyle = ptr.isPinching ? 'rgba(249, 115, 22, 0.85)' : 'rgba(132, 204, 22, 0.55)';
+                ctx.fill(); 
+                ctx.strokeStyle = '#FFFFFF'; 
+                ctx.lineWidth = 3; 
+                ctx.stroke();
+                
+                // Center Dot
+                ctx.beginPath();
+                ctx.arc(ptr.x, ptr.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fill();
+
+                // "✊ หยิบ" Tag above hand when pinching (Matching reference image)
+                if (ptr.isPinching) {
+                    const tagText = GameState.isDragging ? '✊ กำลังหยิบ' : '✊ หยิบ';
+                    ctx.font = '600 13px Prompt';
+                    const textW = ctx.measureText(tagText).width;
+                    const tagW = textW + 18;
+                    const tagH = 26;
+                    const tagX = ptr.x;
+                    const tagY = ptr.y - 32;
+
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+                    ctx.strokeStyle = '#F97316';
+                    ctx.lineWidth = 2;
+                    drawRoundedRect(ctx, tagX - tagW / 2, tagY - tagH / 2, tagW, tagH, 13);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(tagText, tagX, tagY + 1);
+                }
+
+                ctx.restore();
+            }
+        };
+
+        /**
+         * 7. INPUT SYSTEM (MOUSE, TOUCH & AR PINCH)
+         */
+        const InputSys = {
+            pointer: { x: 0, y: 0, targetX: 0, targetY: 0, isPinching: false, wasPinching: false },
+            startPointerPos: { x: 0, y: 0 },
+            hasDraggedFar: false,
+            lerpSpeed: 18,
+            
+            init: function(canvas) {
+                const updatePos = (clientX, clientY) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const w = Renderer.layout.width || rect.width || window.innerWidth;
+                    const h = Renderer.layout.height || rect.height || window.innerHeight;
+                    const rw = rect.width || w;
+                    const rh = rect.height || h;
+                    this.pointer.targetX = (clientX - rect.left) * (w / rw);
+                    this.pointer.targetY = (clientY - rect.top) * (h / rh);
+                    if (GameState.isSimulating) {
+                        this.pointer.x = this.pointer.targetX;
+                        this.pointer.y = this.pointer.targetY;
+                    }
+                    if (Math.hypot(this.pointer.x - this.startPointerPos.x, this.pointer.y - this.startPointerPos.y) > 20) {
+                        this.hasDraggedFar = true;
+                    }
+                };
+
+                const onPointerDown = (e) => {
+                    if (!GameState.isSimulating) return;
+                    updatePos(e.clientX, e.clientY);
+                    this.startPointerPos = { x: this.pointer.x, y: this.pointer.y };
+                    this.hasDraggedFar = false;
+                    this.pointer.isPinching = true;
+                    this.checkBasketItemClick();
+                };
+
+                const onPointerMove = (e) => {
+                    if (!GameState.isSimulating) return;
+                    updatePos(e.clientX, e.clientY);
+                };
+
+                const onPointerUp = (e) => {
+                    if (!GameState.isSimulating) return;
+                    this.pointer.isPinching = false;
+                    if (GameState.isDragging) {
+                        this.tryDropItem();
+                    }
+                };
+
+                window.addEventListener('pointermove', onPointerMove, { passive: true });
+                window.addEventListener('pointerup', onPointerUp, { passive: true });
+                window.addEventListener('pointercancel', onPointerUp, { passive: true });
+                canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+
+                // Touch support fallback
+                canvas.addEventListener('touchstart', (e) => {
+                    if (e.touches && e.touches.length > 0) onPointerDown(e.touches[0]);
+                }, { passive: true });
+                window.addEventListener('touchmove', (e) => {
+                    if (e.touches && e.touches.length > 0) onPointerMove(e.touches[0]);
+                }, { passive: true });
+                window.addEventListener('touchend', (e) => {
+                    onPointerUp(e);
+                }, { passive: true });
+            },
+            update: function(dt) {
+                if (!GameState.isSimulating) {
+                    this.pointer.x += (this.pointer.targetX - this.pointer.x) * (1 - Math.pow(0.001, dt));
+                    this.pointer.y += (this.pointer.targetY - this.pointer.y) * (1 - Math.pow(0.001, dt));
+                }
+                
+                // Detect Pinch State Transitions
+                if (this.pointer.isPinching && !this.pointer.wasPinching) {
+                    if (!GameState.isDragging) {
+                        this.tryGrabItem();
+                    }
+                } else if (!this.pointer.isPinching && this.pointer.wasPinching) {
+                    if (GameState.isDragging) {
+                        this.tryDropItem();
+                    }
+                }
+                
+                if (GameState.isDragging && GameState.draggedItem) {
+                    GameState.draggedItem.x = this.pointer.x;
+                    GameState.draggedItem.y = this.pointer.y;
+                }
+                this.pointer.wasPinching = this.pointer.isPinching;
+            },
+            checkBasketItemClick: function() {
+                // 1. If user clicks on the right basket in simulation mode, remove top item
+                const center = Renderer.layout.rightBasketCenter;
+                const bw = Renderer.layout.basketW;
+                const dist = Math.hypot(this.pointer.x - center.x, this.pointer.y - (center.y + 10));
+                
+                if (dist < bw / 2 + 20) {
+                    if (GameState.rightBasketItems.length > 0) {
+                        const grabbed = GameState.rightBasketItems.pop();
+                        AudioSys.playGrab();
+                        GameState.isDragging = true;
+                        GameState.draggedItem = { baseItem: grabbed.baseItem, x: this.pointer.x, y: this.pointer.y };
+                        return;
+                    }
+                }
+
+                // 2. If user clicks on moving conveyor belt fruit (takes and removes from belt)
+                const beltFruit = ConveyorBelt.takeItemAt(this.pointer.x, this.pointer.y);
+                if (beltFruit) {
+                    AudioSys.playGrab();
+                    GameState.isDragging = true;
+                    GameState.draggedItem = { baseItem: beltFruit, x: this.pointer.x, y: this.pointer.y, fromTrayTap: true };
+                }
+            },
+            tryGrabItem: function() {
+                const center = Renderer.layout.rightBasketCenter;
+                const bw = Renderer.layout.basketW;
+                
+                // 1. Check if grabbing from Right Basket to remove
+                if (Math.hypot(this.pointer.x - center.x, this.pointer.y - center.y) < bw / 2 + 25) {
+                    if (GameState.rightBasketItems.length > 0) {
+                        const grabbed = GameState.rightBasketItems.pop();
+                        AudioSys.playGrab();
+                        GameState.isDragging = true;
+                        GameState.draggedItem = { baseItem: grabbed.baseItem, x: this.pointer.x, y: this.pointer.y };
+                        return;
+                    }
+                }
+
+                // 2. Check if hovering/pinching over a moving fruit on the conveyor belt! (takes and removes from belt)
+                const beltFruit = ConveyorBelt.takeItemAt(this.pointer.x, this.pointer.y);
+                if (beltFruit) {
+                    AudioSys.playGrab();
+                    GameState.isDragging = true;
+                    GameState.draggedItem = { baseItem: beltFruit, x: this.pointer.x, y: this.pointer.y };
+                    return;
+                }
+
+                // 3. Check if hovering over Next Question button on victory modal in AR mode
+                if (GameState.isModalOpen) {
+                    GameController.nextQuestion();
+                    return;
+                }
+
+                // 4. Check if hovering over Hint button in AR mode
+                const hintBtn = document.getElementById('btn-hint');
+                if (hintBtn) {
+                    const canvasRect = Renderer.canvas.getBoundingClientRect();
+                    const screenX = (this.pointer.x / (Renderer.layout.width || Renderer.canvas.width)) * canvasRect.width + canvasRect.left;
+                    const screenY = (this.pointer.y / (Renderer.layout.height || Renderer.canvas.height)) * canvasRect.height + canvasRect.top;
+                    const btnRect = hintBtn.getBoundingClientRect();
+                    if (screenX >= btnRect.left && screenX <= btnRect.right && screenY >= btnRect.top && screenY <= btnRect.bottom) {
+                        GameController.showHint();
+                        return;
+                    }
+                }
+            },
+            tryDropItem: function() {
+                if (!GameState.draggedItem) return;
+                const item = GameState.draggedItem;
+                GameState.isDragging = false;
+                GameState.draggedItem = null;
+                
+                const center = Renderer.layout.rightBasketCenter;
+                const bw = Renderer.layout.basketW;
+                const bh = Renderer.layout.basketH;
+                
+                // If dropped near Right Basket OR tapped from conveyor belt without dragging far away
+                const distToBasket = Math.hypot(item.x - center.x, item.y - center.y);
+                const isNearBasket = distToBasket < bw / 2 + 55 || (item.x > center.x - bw/2 - 25 && item.x < center.x + bw/2 + 25 && item.y > center.y - 45 && item.y < center.y + bh + 65);
+                
+                if (isNearBasket || (item.fromTrayTap && !this.hasDraggedFar)) {
+                    AudioSys.playDrop();
+                    GameState.rightBasketItems.push({ baseItem: item.baseItem, x: 0, y: 0 });
+                } else {
+                    // Dropped elsewhere -> Discard (play subtle sound)
+                    AudioSys.playClick();
+                }
+            }
+        };
+
+        /**
+         * 8. AR CONTROLLER (MEDIAPIPE HANDS + WEBCAM)
+         */
+        const ARController = {
+            cameraActive: false, 
+            lastFrame: null, 
+            lastHandLandmarks: null, 
+            camera: null, 
+            hands: null,
+            isInitializing: false,
+            
+            init: async function() {
+                if (this.isInitializing) return;
+                this.isInitializing = true;
+                
+                const videoEl = document.getElementById('camera-video');
+                try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error("getUserMedia not supported");
+                    }
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            width: { ideal: 640 }, 
+                            height: { ideal: 480 }, 
+                            facingMode: 'user' 
+                        }
+                    });
+                    
+                    videoEl.srcObject = stream;
+                    await videoEl.play();
+                    this.cameraActive = true;
+                    
+                    if (typeof Hands !== 'undefined') {
+                        if (!this.hands) {
+                            this.hands = new Hands({
+                                locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+                            });
+                            this.hands.setOptions({ 
+                                maxNumHands: 1, 
+                                modelComplexity: 1, 
+                                minDetectionConfidence: 0.65, 
+                                minTrackingConfidence: 0.65 
+                            });
+                            this.hands.onResults((results) => this.onResults(results));
+                        }
+                        
+                        if (!this.camera && typeof Camera !== 'undefined') {
+                            this.camera = new Camera(videoEl, { 
+                                onFrame: async () => { 
+                                    if (this.cameraActive && this.hands) {
+                                        this.lastFrame = videoEl; 
+                                        await this.hands.send({ image: videoEl }); 
+                                    }
+                                }, 
+                                width: 640, 
+                                height: 480 
+                            });
+                        }
+                        
+                        if (this.camera) await this.camera.start();
+                    }
+                    GameState.isSimulating = false;
+                    const simWarn = document.getElementById('simulator-warning');
+                    if (simWarn) simWarn.classList.add('hidden');
+                    this.updateModeUI(true);
+                } catch (err) {
+                    console.warn("Camera/AR unavailable (using touch/mouse):", err.message || err);
+                    this.cameraActive = false;
+                    GameState.isSimulating = true;
+                    const simWarn = document.getElementById('simulator-warning');
+                    if (simWarn) simWarn.classList.remove('hidden');
+                    this.updateModeUI(false);
+                } finally {
+                    this.isInitializing = false;
+                }
+            },
+            toggleCamera: function() {
+                AudioSys.init();
+                AudioSys.playClick();
+                if (this.cameraActive) {
+                    // Turn off camera -> Switch to Touch/Mouse
+                    this.cameraActive = false;
+                    this.lastFrame = null;
+                    this.lastHandLandmarks = null;
+                    GameState.isSimulating = true;
+                    document.getElementById('simulator-warning').classList.remove('hidden');
+                    this.updateModeUI(false);
+                } else {
+                    // Turn on camera
+                    this.init();
+                }
+            },
+            updateModeUI: function(isArActive) {
+                const btnIcon = document.getElementById('camera-icon');
+                const btnText = document.getElementById('camera-text');
+                if (isArActive) {
+                    if (btnIcon) btnIcon.innerText = '📷';
+                    if (btnText) btnText.innerText = 'โหมดกล้อง AR: เปิด';
+                } else {
+                    if (btnIcon) btnIcon.innerText = '🖱️';
+                    if (btnText) btnText.innerText = 'โหมดสัมผัส/เมาส์';
+                }
+            },
+            onResults: function(results) {
+                if (!this.cameraActive) return;
+                
+                if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                    this.lastHandLandmarks = null;
+                    if (!GameState.isSimulating) {
+                        InputSys.pointer.isPinching = false;
+                    }
+                    return;
+                }
+                
+                const lms = results.multiHandLandmarks[0];
+                this.lastHandLandmarks = lms;
+                
+                // Index finger tip (landmark 8) and Thumb tip (landmark 4)
+                const idx = lms[8];
+                const thb = lms[4];
+                const w = Renderer.layout.width || Renderer.canvas.width; 
+                const h = Renderer.layout.height || Renderer.canvas.height;
+                
+                // Mirrored coordinates for intuitive screen control
+                InputSys.pointer.targetX = w - (idx.x * w);
+                InputSys.pointer.targetY = idx.y * h;
+                
+                // Calculate 3D euclidean distance for robust pinch detection
+                const dist = Math.hypot(idx.x - thb.x, idx.y - thb.y, (idx.z || 0) - (thb.z || 0));
+                
+                // Hysteresis threshold
+                if (dist < 0.055) {
+                    InputSys.pointer.isPinching = true;
+                } else if (dist > 0.075) {
+                    InputSys.pointer.isPinching = false;
+                }
+            }
+        };
+
+        /**
+         * 9. PARTICLE ENGINE (CELEBRATORY CONFETTI)
+         */
+        const Particles = {
+            pool: [], 
+            init: function() { 
+                for (let i = 0; i < 60; i++) {
+                    this.pool.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, color: '', size: 0 });
+                }
+            },
+            createExplosion: function(x, y) {
+                const colors = ['#F97316', '#84CC16', '#EAB308', '#38BDF8', '#EC4899', '#A855F7']; 
+                let spawned = 0;
+                for (let i = 0; i < this.pool.length; i++) {
+                    if (!this.pool[i].active) {
+                        const p = this.pool[i]; 
+                        p.active = true; 
+                        p.x = x; 
+                        p.y = y;
+                        const angle = Math.random() * Math.PI * 2; 
+                        const speed = Math.random() * 12 + 4;
+                        p.vx = Math.cos(angle) * speed; 
+                        p.vy = Math.sin(angle) * speed - 2;
+                        p.life = 1.0; 
+                        p.color = colors[Math.floor(Math.random() * colors.length)]; 
+                        p.size = Math.random() * 9 + 5;
+                        if (++spawned > 35) break;
+                    }
+                }
+            },
+            updateAndDraw: function(ctx, dt) {
+                for (let i = 0; i < this.pool.length; i++) {
+                    const p = this.pool[i];
+                    if (p.active) {
+                        p.x += p.vx; 
+                        p.vy += 0.35; // gravity
+                        p.y += p.vy; 
+                        p.life -= dt * 1.3;
+                        if (p.life <= 0) {
+                            p.active = false;
+                        } else {
+                            ctx.save(); 
+                            ctx.globalAlpha = Math.max(0, p.life); 
+                            ctx.fillStyle = p.color;
+                            ctx.translate(p.x, p.y); 
+                            ctx.rotate(p.life * 8); 
+                            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); 
+                            ctx.restore();
+                        }
+                    }
+                }
+            }
+        };
+        Particles.init();
+
+        // Global Window Bindings for rock-solid event handler access
+        window.GameController = GameController;
+        window.UI = UI;
+        window.API = API;
+        window.AudioSys = AudioSys;
+        window.ARController = ARController;
+        window.Renderer = Renderer;
+        window.ConveyorBelt = ConveyorBelt;
+        window.FruitRenderer = FruitRenderer;
+        window.InputSys = InputSys;
+
+        function bindUIEvents() {
+            const btnStart = document.getElementById('btn-start-game');
+            if (btnStart) {
+                btnStart.onclick = function(e) {
+                    if (e) e.preventDefault();
+                    GameController.startGame();
+                };
+            }
+            const inpName = document.getElementById('player-name-input');
+            if (inpName) {
+                inpName.oninput = function() {
+                    UI.checkNameAvailability();
+                };
+                inpName.onkeydown = function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        GameController.startGame();
+                    }
+                };
+            }
+        }
+
+        // Boot
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                bindUIEvents();
+                UI.init();
+            });
+        } else {
+            bindUIEvents();
+            UI.init();
+        }
+    </script>
+</body>
+</html>
