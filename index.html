@@ -234,6 +234,7 @@
             <span>© 2026 กิตติศักดิ์ บุญเกตุ | โรงเรียนชุมชนเทศบาลวัดมณีสถิตกปิฏฐาราม. All Rights Reserved.</span>
             <span class="hidden sm:inline text-amber-700/60">•</span>
             <span class="text-amber-900 font-bold">สื่อการเรียนรู้วิทยาการคำนวณ (Computational Thinking)</span>
+            <a href="admin.html" title="ระบบจัดการหลังบ้าน (Admin Dashboard)" class="inline-flex items-center text-slate-400 hover:text-orange-600 transition-colors ml-1 p-0.5">⚙️</a>
         </footer>
     </div>
 
@@ -459,8 +460,8 @@
          * กำหนดค่า Supabase Project URL และ Anon Key เพื่อเชื่อมต่อฐานข้อมูลบน Supabase.com
          */
         const SUPABASE_CONFIG = {
-            url: 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co',
-            anonKey: 'YOUR_SUPABASE_ANON_KEY',
+            url: localStorage.getItem('supabase_project_url') || 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co',
+            anonKey: localStorage.getItem('supabase_anon_key') || 'YOUR_SUPABASE_ANON_KEY',
             tableName: 'leaderboard'
         };
 
