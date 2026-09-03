@@ -2206,6 +2206,26 @@
                 ctx.fill(); 
                 ctx.stroke();
                 
+                // Pulsing Target Guide Ring on Right Basket when holding a fruit!
+                if (bowlColor !== '#3B82F6' && GameState.isDragging) {
+                    ctx.save();
+                    const pulse = Math.sin(Date.now() / 150) * 5;
+                    ctx.strokeStyle = '#22C55E';
+                    ctx.lineWidth = 4;
+                    ctx.setLineDash([8, 6]);
+                    ctx.beginPath();
+                    ctx.arc(0, drop + 10, bw / 2 + 18 + pulse, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    // "🎯 นำมาวางที่นี่" Badge above right basket
+                    ctx.fillStyle = '#15803D';
+                    ctx.font = '700 13px Prompt';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('🎯 นำมาวางที่นี่', 0, drop - 18);
+                    ctx.restore();
+                }
+
                 // Weight Pill Badge below basket
                 const labelY = drop + bw / 2 + 22;
                 ctx.fillStyle = 'white'; 
@@ -2446,15 +2466,25 @@
                     if (!GameState.isDragging) {
                         this.tryGrabItem();
                     }
-                } else if (!this.pointer.isPinching && this.pointer.wasPinching) {
-                    if (GameState.isDragging) {
-                        this.tryDropItem();
-                    }
                 }
                 
+                // Sticky-Hold Fruit Mechanics: Once grabbed, fruit NEVER drops mid-air
                 if (GameState.isDragging && GameState.draggedItem) {
                     GameState.draggedItem.x = this.pointer.x;
                     GameState.draggedItem.y = this.pointer.y;
+
+                    // Auto-Snap to Right Basket when hand reaches the scale!
+                    const center = Renderer.layout.rightBasketCenter;
+                    const bw = Renderer.layout.basketW;
+                    const bh = Renderer.layout.basketH;
+                    const distToBasket = Math.hypot(this.pointer.x - center.x, this.pointer.y - center.y);
+                    const isOverBasket = distToBasket < bw / 2 + 70 || 
+                        (this.pointer.x > center.x - bw/2 - 45 && this.pointer.x < center.x + bw/2 + 45 && 
+                         this.pointer.y > center.y - 65 && this.pointer.y < center.y + bh + 85);
+
+                    if (isOverBasket) {
+                        this.tryDropItem();
+                    }
                 }
                 this.pointer.wasPinching = this.pointer.isPinching;
             },
@@ -2537,13 +2567,13 @@
                 
                 // Generous Drop Zone for Right Basket (Dropping is effortless and intuitive)
                 const distToBasket = Math.hypot(item.x - center.x, item.y - center.y);
-                const isNearBasket = distToBasket < bw / 2 + 75 || (item.x > center.x - bw/2 - 45 && item.x < center.x + bw/2 + 45 && item.y > center.y - 65 && item.y < center.y + bh + 85);
+                const isNearBasket = distToBasket < bw / 2 + 85 || (item.x > center.x - bw/2 - 55 && item.x < center.x + bw/2 + 55 && item.y > center.y - 75 && item.y < center.y + bh + 95);
                 
-                if (isNearBasket || (item.fromTrayTap && !this.hasDraggedFar)) {
+                if (isNearBasket || item.fromTrayTap) {
                     AudioSys.playDrop();
                     GameState.rightBasketItems.push({ baseItem: item.baseItem, x: 0, y: 0 });
                 } else {
-                    // Dropped elsewhere -> Discard / put back
+                    // Put back to conveyor belt
                     AudioSys.playClick();
                 }
             }
