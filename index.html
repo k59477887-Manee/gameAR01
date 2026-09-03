@@ -189,16 +189,16 @@
                 </div>
             </div>
 
-            <!-- Quick 3 Steps Guide -->
-            <div class="w-full max-w-md grid grid-cols-3 gap-1.5 text-center text-[10px] md:text-xs font-bold text-amber-900">
-                <div class="bg-white/80 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
-                    1️⃣ สังเกตน้ำหนักซ้าย
+            <!-- Quick Mission Step Bar -->
+            <div class="grid grid-cols-3 gap-1.5 w-full max-w-md my-1 text-center text-[10px] sm:text-xs font-bold text-amber-950">
+                <div class="bg-white/85 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
+                    1️⃣ ดูน้ำหนักเป้าหมาย
                 </div>
-                <div class="bg-white/80 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
-                    2️⃣ หยิบผลไม้
+                <div class="bg-white/85 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
+                    2️⃣ กำมือ ✊ / จีบ 🤏 หยิบ
                 </div>
-                <div class="bg-white/80 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
-                    3️⃣ วางให้สมดุลพอดี
+                <div class="bg-white/85 backdrop-blur-sm rounded-xl py-1 px-1.5 border border-white/60 shadow-sm">
+                    3️⃣ แบมือ 🖐️ ปล่อยลงตาชั่ง
                 </div>
             </div>
 
@@ -1490,13 +1490,13 @@
             takeItemAt: function(screenX, screenY) {
                 const h = Renderer.layout.height;
                 const beltY = h - 145;
-                if (screenY < beltY - 20 || screenY > h + 20) return null;
+                if (screenY < beltY - 45 || screenY > h + 35) return null;
                 
                 const centerY = beltY + 135 * 0.46;
                 for (let i = 0; i < this.items.length; i++) {
                     const it = this.items[i];
                     const dist = Math.hypot(screenX - it.x, screenY - centerY);
-                    if (dist < 52) {
+                    if (dist < 68) {
                         const picked = this.items.splice(i, 1)[0];
                         return picked.baseItem;
                     }
@@ -2326,9 +2326,17 @@
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fill();
 
-                // "✊ หยิบ" Tag above hand when pinching (Matching reference image)
-                if (ptr.isPinching) {
-                    const tagText = GameState.isDragging ? '✊ กำลังหยิบ' : '✊ หยิบ';
+                // Dynamic Hand Gesture Feedback Tag
+                if (ptr.isPinching || GameState.isDragging) {
+                    let tagText = '✊ กำลังหยิบ';
+                    if (ptr.gestureType === 'pinch') {
+                        tagText = GameState.isDragging ? '🤏 กำลังถือผลไม้' : '🤏 จีบนิ้วหยิบ';
+                    } else if (ptr.gestureType === 'fist') {
+                        tagText = GameState.isDragging ? '✊ กำลังถือผลไม้' : '✊ กำมือหยิบ';
+                    } else if (GameState.isDragging) {
+                        tagText = '✨ กำลังถือผลไม้';
+                    }
+                    
                     ctx.font = '600 13px Prompt';
                     const textW = ctx.measureText(tagText).width;
                     const tagW = textW + 18;
@@ -2337,7 +2345,7 @@
                     const tagY = ptr.y - 32;
 
                     ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-                    ctx.strokeStyle = '#F97316';
+                    ctx.strokeStyle = ptr.gestureType === 'fist' ? '#EAB308' : '#F97316';
                     ctx.lineWidth = 2;
                     drawRoundedRect(ctx, tagX - tagW / 2, tagY - tagH / 2, tagW, tagH, 13);
                     ctx.fill();
@@ -2354,58 +2362,65 @@
         };
 
         /**
-         * 7. INPUT SYSTEM (MOUSE, TOUCH & AR PINCH)
+         * 7. INPUT SYSTEM (MOUSE, TOUCH & AR DUAL-GESTURE PINCH/GRAB)
          */
         const InputSys = {
-            pointer: { x: 0, y: 0, targetX: 0, targetY: 0, isPinching: false, wasPinching: false },
-            startPointerPos: { x: 0, y: 0 },
+            pointer: { 
+                x: window.innerWidth / 2, 
+                y: window.innerHeight / 2, 
+                targetX: window.innerWidth / 2, 
+                targetY: window.innerHeight / 2, 
+                isPinching: false, 
+                wasPinching: false,
+                gestureType: 'none', // 'pinch' | 'fist' | 'point' | 'touch'
+                releaseGraceCount: 0
+            },
             hasDraggedFar: false,
-            lerpSpeed: 18,
-            
-            init: function(canvas) {
-                const updatePos = (clientX, clientY) => {
+            init: function() {
+                const canvas = Renderer.canvas;
+                
+                const onPointerDown = (e) => {
                     const rect = canvas.getBoundingClientRect();
-                    const w = Renderer.layout.width || rect.width || window.innerWidth;
-                    const h = Renderer.layout.height || rect.height || window.innerHeight;
-                    const rw = rect.width || w;
-                    const rh = rect.height || h;
-                    this.pointer.targetX = (clientX - rect.left) * (w / rw);
-                    this.pointer.targetY = (clientY - rect.top) * (h / rh);
+                    const scaleX = (Renderer.layout.width || canvas.width) / rect.width;
+                    const scaleY = (Renderer.layout.height || canvas.height) / rect.height;
+                    this.pointer.x = (e.clientX - rect.left) * scaleX;
+                    this.pointer.y = (e.clientY - rect.top) * scaleY;
+                    this.pointer.targetX = this.pointer.x;
+                    this.pointer.targetY = this.pointer.y;
+                    this.pointer.isPinching = true;
+                    this.pointer.gestureType = 'touch';
+                    this.hasDraggedFar = false;
+                    
+                    if (GameState.isSimulating) {
+                        this.checkBasketItemClick();
+                    }
+                };
+
+                const onPointerMove = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = (Renderer.layout.width || canvas.width) / rect.width;
+                    const scaleY = (Renderer.layout.height || canvas.height) / rect.height;
+                    this.pointer.targetX = (e.clientX - rect.left) * scaleX;
+                    this.pointer.targetY = (e.clientY - rect.top) * scaleY;
+                    
                     if (GameState.isSimulating) {
                         this.pointer.x = this.pointer.targetX;
                         this.pointer.y = this.pointer.targetY;
                     }
-                    if (Math.hypot(this.pointer.x - this.startPointerPos.x, this.pointer.y - this.startPointerPos.y) > 20) {
-                        this.hasDraggedFar = true;
-                    }
                 };
 
-                const onPointerDown = (e) => {
-                    if (!GameState.isSimulating) return;
-                    updatePos(e.clientX, e.clientY);
-                    this.startPointerPos = { x: this.pointer.x, y: this.pointer.y };
-                    this.hasDraggedFar = false;
-                    this.pointer.isPinching = true;
-                    this.checkBasketItemClick();
-                };
-
-                const onPointerMove = (e) => {
-                    if (!GameState.isSimulating) return;
-                    updatePos(e.clientX, e.clientY);
-                };
-
-                const onPointerUp = (e) => {
-                    if (!GameState.isSimulating) return;
+                const onPointerUp = () => {
                     this.pointer.isPinching = false;
+                    this.pointer.gestureType = 'none';
                     if (GameState.isDragging) {
                         this.tryDropItem();
                     }
                 };
 
-                window.addEventListener('pointermove', onPointerMove, { passive: true });
-                window.addEventListener('pointerup', onPointerUp, { passive: true });
-                window.addEventListener('pointercancel', onPointerUp, { passive: true });
-                canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+                // Mouse events
+                canvas.addEventListener('mousedown', onPointerDown);
+                window.addEventListener('mousemove', onPointerMove);
+                window.addEventListener('mouseup', onPointerUp);
 
                 // Touch support fallback
                 canvas.addEventListener('touchstart', (e) => {
@@ -2420,11 +2435,13 @@
             },
             update: function(dt) {
                 if (!GameState.isSimulating) {
-                    this.pointer.x += (this.pointer.targetX - this.pointer.x) * (1 - Math.pow(0.001, dt));
-                    this.pointer.y += (this.pointer.targetY - this.pointer.y) * (1 - Math.pow(0.001, dt));
+                    // Ultra-smooth responsive lerp (zero jitter)
+                    const lerpFactor = 1 - Math.pow(0.0001, dt);
+                    this.pointer.x += (this.pointer.targetX - this.pointer.x) * lerpFactor;
+                    this.pointer.y += (this.pointer.targetY - this.pointer.y) * lerpFactor;
                 }
                 
-                // Detect Pinch State Transitions
+                // Detect Grab / Pinch State Transitions
                 if (this.pointer.isPinching && !this.pointer.wasPinching) {
                     if (!GameState.isDragging) {
                         this.tryGrabItem();
@@ -2447,7 +2464,7 @@
                 const bw = Renderer.layout.basketW;
                 const dist = Math.hypot(this.pointer.x - center.x, this.pointer.y - (center.y + 10));
                 
-                if (dist < bw / 2 + 20) {
+                if (dist < bw / 2 + 25) {
                     if (GameState.rightBasketItems.length > 0) {
                         const grabbed = GameState.rightBasketItems.pop();
                         AudioSys.playGrab();
@@ -2470,7 +2487,7 @@
                 const bw = Renderer.layout.basketW;
                 
                 // 1. Check if grabbing from Right Basket to remove
-                if (Math.hypot(this.pointer.x - center.x, this.pointer.y - center.y) < bw / 2 + 25) {
+                if (Math.hypot(this.pointer.x - center.x, this.pointer.y - center.y) < bw / 2 + 35) {
                     if (GameState.rightBasketItems.length > 0) {
                         const grabbed = GameState.rightBasketItems.pop();
                         AudioSys.playGrab();
@@ -2480,7 +2497,7 @@
                     }
                 }
 
-                // 2. Check if hovering/pinching over a moving fruit on the conveyor belt! (takes and removes from belt)
+                // 2. Check if hovering/pinching over a moving fruit on the conveyor belt!
                 const beltFruit = ConveyorBelt.takeItemAt(this.pointer.x, this.pointer.y);
                 if (beltFruit) {
                     AudioSys.playGrab();
@@ -2518,22 +2535,22 @@
                 const bw = Renderer.layout.basketW;
                 const bh = Renderer.layout.basketH;
                 
-                // If dropped near Right Basket OR tapped from conveyor belt without dragging far away
+                // Generous Drop Zone for Right Basket (Dropping is effortless and intuitive)
                 const distToBasket = Math.hypot(item.x - center.x, item.y - center.y);
-                const isNearBasket = distToBasket < bw / 2 + 55 || (item.x > center.x - bw/2 - 25 && item.x < center.x + bw/2 + 25 && item.y > center.y - 45 && item.y < center.y + bh + 65);
+                const isNearBasket = distToBasket < bw / 2 + 75 || (item.x > center.x - bw/2 - 45 && item.x < center.x + bw/2 + 45 && item.y > center.y - 65 && item.y < center.y + bh + 85);
                 
                 if (isNearBasket || (item.fromTrayTap && !this.hasDraggedFar)) {
                     AudioSys.playDrop();
                     GameState.rightBasketItems.push({ baseItem: item.baseItem, x: 0, y: 0 });
                 } else {
-                    // Dropped elsewhere -> Discard (play subtle sound)
+                    // Dropped elsewhere -> Discard / put back
                     AudioSys.playClick();
                 }
             }
         };
 
         /**
-         * 8. AR CONTROLLER (MEDIAPIPE HANDS + WEBCAM)
+         * 8. AR CONTROLLER (MEDIAPIPE HANDS + WEBCAM + ULTRA-RESPONSIVE GESTURE ENGINE)
          */
         const ARController = {
             cameraActive: false, 
@@ -2542,6 +2559,7 @@
             camera: null, 
             hands: null,
             isInitializing: false,
+            lostFrameCount: 0,
             
             init: async function() {
                 if (this.isInitializing) return;
@@ -2573,8 +2591,8 @@
                             this.hands.setOptions({ 
                                 maxNumHands: 1, 
                                 modelComplexity: 1, 
-                                minDetectionConfidence: 0.65, 
-                                minTrackingConfidence: 0.65 
+                                minDetectionConfidence: 0.55, 
+                                minTrackingConfidence: 0.55 
                             });
                             this.hands.onResults((results) => this.onResults(results));
                         }
@@ -2642,32 +2660,90 @@
                 if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
                     this.lastHandLandmarks = null;
                     if (!GameState.isSimulating) {
-                        InputSys.pointer.isPinching = false;
+                        // Anti-Drop Buffer: If hand lost for just 1-5 frames, keep holding!
+                        if (GameState.isDragging) {
+                            this.lostFrameCount++;
+                            if (this.lostFrameCount > 10) { // ~300ms lost
+                                InputSys.pointer.isPinching = false;
+                                this.lostFrameCount = 0;
+                            }
+                        } else {
+                            InputSys.pointer.isPinching = false;
+                            this.lostFrameCount = 0;
+                        }
                     }
                     return;
                 }
                 
+                this.lostFrameCount = 0;
                 const lms = results.multiHandLandmarks[0];
                 this.lastHandLandmarks = lms;
                 
-                // Index finger tip (landmark 8) and Thumb tip (landmark 4)
-                const idx = lms[8];
-                const thb = lms[4];
                 const w = Renderer.layout.width || Renderer.canvas.width; 
                 const h = Renderer.layout.height || Renderer.canvas.height;
-                
+
+                // 1. Dynamic Palm Scale Normalization (Distance from Wrist 0 to Middle MCP 9)
+                const palmScale = Math.hypot(lms[9].x - lms[0].x, lms[9].y - lms[0].y) || 0.18;
+
+                // 2. Pinch Distances (Normalized by palm scale)
+                const distThumbIndex = Math.hypot(lms[4].x - lms[8].x, lms[4].y - lms[8].y) / palmScale;
+                const distThumbMiddle = Math.hypot(lms[4].x - lms[12].x, lms[4].y - lms[12].y) / palmScale;
+
+                // 3. Fist / Finger Curl Distances (Fingertips to Wrist)
+                const distIndexWrist = Math.hypot(lms[8].x - lms[0].x, lms[8].y - lms[0].y) / palmScale;
+                const distMiddleWrist = Math.hypot(lms[12].x - lms[0].x, lms[12].y - lms[0].y) / palmScale;
+                const distRingWrist = Math.hypot(lms[16].x - lms[0].x, lms[16].y - lms[0].y) / palmScale;
+                const distPinkyWrist = Math.hypot(lms[20].x - lms[0].x, lms[20].y - lms[0].y) / palmScale;
+
+                let foldedFingers = 0;
+                if (distIndexWrist < 1.18) foldedFingers++;
+                if (distMiddleWrist < 1.18) foldedFingers++;
+                if (distRingWrist < 1.18) foldedFingers++;
+                if (distPinkyWrist < 1.18) foldedFingers++;
+
+                // Gestures Detection
+                const isFistGrab = (foldedFingers >= 3);
+                const isPinchGrab = (distThumbIndex < 0.50 || distThumbMiddle < 0.50);
+
+                // Determine Effective Pointer Coordinates
+                let rawX = lms[8].x;
+                let rawY = lms[8].y;
+
+                if (isPinchGrab) {
+                    rawX = (lms[4].x + lms[8].x) / 2;
+                    rawY = (lms[4].y + lms[8].y) / 2;
+                    InputSys.pointer.gestureType = 'pinch';
+                } else if (isFistGrab) {
+                    rawX = lms[9].x;
+                    rawY = lms[9].y;
+                    InputSys.pointer.gestureType = 'fist';
+                } else {
+                    rawX = lms[8].x;
+                    rawY = lms[8].y;
+                    InputSys.pointer.gestureType = 'point';
+                }
+
                 // Mirrored coordinates for intuitive screen control
-                InputSys.pointer.targetX = w - (idx.x * w);
-                InputSys.pointer.targetY = idx.y * h;
-                
-                // Calculate 3D euclidean distance for robust pinch detection
-                const dist = Math.hypot(idx.x - thb.x, idx.y - thb.y, (idx.z || 0) - (thb.z || 0));
-                
-                // Hysteresis threshold
-                if (dist < 0.055) {
-                    InputSys.pointer.isPinching = true;
-                } else if (dist > 0.075) {
-                    InputSys.pointer.isPinching = false;
+                InputSys.pointer.targetX = w - (rawX * w);
+                InputSys.pointer.targetY = rawY * h;
+
+                // Hybrid Grab Decision Engine with Zero-Drop Hysteresis
+                if (!GameState.isDragging) {
+                    // Start Grab: Either pinch or fist
+                    if (isPinchGrab || isFistGrab) {
+                        InputSys.pointer.isPinching = true;
+                    } else {
+                        InputSys.pointer.isPinching = false;
+                    }
+                } else {
+                    // While Dragging: ONLY drop when player CLEARLY opens/spreads hand
+                    const isOpenHand = (foldedFingers <= 1 && distThumbIndex > 0.68 && distThumbMiddle > 0.68);
+                    if (isOpenHand) {
+                        InputSys.pointer.isPinching = false;
+                    } else {
+                        // Hold tightly! (Never drops while moving)
+                        InputSys.pointer.isPinching = true;
+                    }
                 }
             }
         };
